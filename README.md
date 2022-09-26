@@ -6,11 +6,13 @@ Code as described in Geuzebroek et al. (2022), allowing the extraction of behavi
 
 For an excellent review on neurally-informed modelling see:
 
+## Presentation code
+Code is provided to run a continuous detection version of the random dot motion task were participants continuously monitor a cloud of white, randomly moving dots for intermittent targets defined as a step change from random to coherent upwards dot motion. During periods of incoherent motion (0% motion coherence), all dots were randomly displaced to a new location throughout the patch on each frame. Coherent dot motion was accomplished by displaying a certain percentage of randomly selected dots in a direction relative to their previous location within each frame. Code is depending utilizing Psychtoolbox functions. 
 
-# contextAnalysis
-Preprocessed data can be found at DOI: [/10.17605/OSF.IO/YJVKU](https://osf.io/yjvku/?view_only=7ed5aee5d09a4d5ca13de1ba169b0588)
+## contextAnalysis
+Preprocessed data can be found at DOI: [/10.17605/OSF.IO/YJVKU](https://osf.io/yjvku/?view_only=7ed5aee5d09a4d5ca13de1ba169b0588). Details on preprocessing can be found (here)[https://biorxiv.org/cgi/content/short/2022.09.01.505650v1].
 
-# contextModelling
+## contextModelling
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. If you use the Software for your own research, cite the paper.
 
