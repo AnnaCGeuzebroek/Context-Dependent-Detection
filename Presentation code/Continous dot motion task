@@ -1,0 +1,444 @@
+% Continuous Dots paradigm 
+% Subject remains fixated at all times, and clicks left button with left hand if he/she detects coherent motion to the
+% left, or clicks right button with right hand if he/she detects motion to the right.
+% Dots are alone on the screen - no saccade targets!
+%Exp Setup: Hannah
+%3x 70% Dominant
+%3x 25% Dominant
+%6x 25%: 7-% =
+try
+% ***************************************************** BASIC SET - UP 
+% PsychDebugWindowConfiguration
+clear all;
+commandwindow;  % puts focus on command window, so if any keyboard buttons are pressed, they'll come up in the comand window rather than in your program!
+% port = hex2dec('C010'); % 888;      % ?? 
+% ioObj = io32;
+% Stat=io32(ioObj);
+
+monitorwidth_cm = 40;   % monitor width in cm
+dist_cm = 57;  % viewing distance in cm
+
+whichScreen = 1;
+[scresw, scresh]=Screen('WindowSize',whichScreen);  % Get screen resolution
+center = [scresw scresh]/2;     % useful to have the pixel coordinates of the very center of the screen (usually where you have someone fixate)
+fixRect = [center-2 center+2];  % fixation dot
+hz=Screen('FrameRate', whichScreen,1);
+
+cm2px = scresw/monitorwidth_cm;  % multiplication factor to convert cm to pixels
+deg2px = dist_cm*cm2px*pi/180;      % multiplication factor to convert degrees to pixels (uses aproximation tanT ~= T).
+
+try
+    load parDC                % load last parameters (in structure called "par")
+catch
+    par.runID='BOB'; par.recordEEG=0;  % or just define some values to give the defaults it is looking for, in case the par was not previously saved
+end
+
+%%%%%%%%%% IMPORTANT SETTINGS (note many of the time values in ms won't work out exactly - depends on refresh rate & flicker - it'll be the closest it can be, should be checked in EEG)
+% Major task options:
+par.numPatches = 1;
+% Now enter parameters for coherence transitions for each condition:
+par.correctTransitionTimes = {[0] [0]}; % one entry per condition (not counting motion direction as a condition)
+par.correctCoh = {[25]};    % all the same - no actual transitions at the transition times
+par.counterTransitionTimes = {[] []}
+par.counterCoh = {[] ...    % no counter motion
+                  []};      % later counterpulse
+par.condProportn = [1]; % proportions - one number for each ROW of correctCoh and counterCoh (coherence waveform condition)
+
+
+% Now enter parameters for coherence transitions for each condition:
+if par.numPatches==1
+    par.videoFrate = 60; %85;   % Monitor refresh rate
+    par.FlickFdots = 15; %17;    %
+elseif par.numPatches==2
+    par.videoFrate = 100;   % Monitor refresh rate
+    if length(par.FlickFdots)==2
+        par.FlickFdots = fliplr(par.FlickFdots)      % Flicker frequency in Hz for the dots - one for every patch
+    else
+        par.FlickFdots = [16.67 20];    % [patch-on-left patch-on-right]
+    end
+end
+
+par.numtargets = 24; % 48; %36; 
+par.BGcolor=0;
+par.secs_btw_targs = [2 4 6 8]; % in sec
+par.targetDur = 1; %2;    % coherent motion duration in seconds
+
+par.dotspeed = 6;       % in degrees per second
+par.dotsize = 6;   % in pixels
+par.numdots = 150;  % this will be the number in a square; the ones outside the circle will be taken away
+par.dotpatchsize = 8;   % degrees of visual angle - diameter of dot patch
+if par.numPatches==1
+    par.patchloc = [0 0];
+elseif par.numPatches==2
+    par.patchloc = [-5 -2 ; 5 -2]; % patch location coordinates [x y] in degrees relative to center of screen
+end
+par.motionDir = [90];   %Change to (90 deg) % in degrees relative to positive x-axis (0=rightward)
+
+% par.rgbGRAY = [1 1 1]*221;  % equiluminant with yellow green cyan cues
+par.rgbGRAY = [1 1 1]*255; % if no cues then might as well make dots bright white! 
+
+par.MinTimeBtwClicks = 0.5;     % In sec. When polling for mouse clicks, don't want to be counting the same click any more than once.
+par.leadintime = 1000;
+
+par.useEL=0;    % =1 to use eyelink
+par.FixWinSize = 3;    % RADIUS of fixation (circular) window in degrees
+
+dlg_title = 'Dot Motion Task';
+while 1
+    prompt = {'Enter SUBJECT/RUN/TASK IDENTIFIER:','EEG? (1=yes, 0=no)'};
+    def = {par.runID,num2str(par.recordEEG)};
+    answer = inputdlg(prompt,dlg_title,1,def);
+    par.runID = answer{1};
+    par.recordEEG = str2num(answer{2});
+    if exist([par.runID '.mat'],'file'), 
+        dlg_title = [par.runID '.mat EXISTS ALREADY - CHOOSE ANOTHER, OR DELETE THAT ONE IF IT IS RUBBISH']
+    else
+        break;
+    end
+end
+
+% SOUND STUFF - there may be a better player in PTB!! (this might not be precise and might cause glitches in the visual stimulation for example)
+Fs = 22050; % Hz
+High = 0.3*sin(2*pi*500*[0:1/Fs:0.1]);
+si = hanning(Fs/100)';
+env = [si(1:round(length(si)/2)) ones(1,length(High)-2*round(length(si)/2)) fliplr(si(1:round(length(si)/2)))];
+hHigh = audioplayer(High.*env, Fs);
+
+Low = 0.4*sin(2*pi*200*[0:1/Fs:0.3]);
+si = hanning(Fs/100)';
+env = [si(1:round(length(si)/2)) ones(1,length(Low)-2*round(length(si)/2)) fliplr(si(1:round(length(si)/2)))];
+hLow = audioplayer(Low.*env, Fs);
+
+% play a tone as an example:
+play(hHigh)
+
+
+if par.useEL, ELCalibrateDialog, end
+
+% Opens a graphics window on the main monitor
+HideCursor;
+window = Screen('OpenWindow', whichScreen, par.BGcolor);
+
+if abs(hz-par.videoFrate)>1
+    cleanup; error(['The monitor is NOT SET to the desired frame rate of ' num2str(par.videoFrate) ' Hz. Change it.'])
+end
+
+if par.useEL
+    %%%%%%%%% EYETRACKING PARAMETERS
+    par.TgWinSize = 3;    % RADIUS of fixation (circular) window in degrees
+    ELsetupCalib
+    Eyelink('Command', 'clear_screen 0')
+    Eyelink('command', 'draw_box %d %d %d %d 15', center(1)-deg2px*par.FixWinSize, center(2)-deg2px*par.FixWinSize, center(1)+deg2px*par.FixWinSize, center(2)+deg2px*par.FixWinSize);
+end
+
+%  ************************************************* CODES AND TRIAL SEQUENCE
+% trigger codes - can only use these 15: [1 4 5 8 9 12 13 16 17 20 21 24 25 28 29]  (don't ask!)
+par.CD_RESP  = 1;
+par.CD_DOTS_ON = 5;     % i.e. ITIstart
+par.CD_COHMOTION_ON = 9;
+par.CD_BUTTONS = [12 13];   % left and right mouse
+
+%%%%%  coherence, motion direction waveforms
+nMD = length(par.motionDir);    % number of motion directions
+nDP = size(par.patchloc,1);     % number of dot patches
+% flicker parameters:
+par.FlickTdots = round(par.videoFrate./par.FlickFdots);      % Period of flicker in number of video frames
+nrefON = floor(par.FlickTdots/2);                       % number of refreshes where the dots are ON
+nrefOFF = par.FlickTdots-nrefON;                      % number of refreshes where the dots are OFF
+
+% the following loop makes a coherence timecourse for EVERY condition and
+% every ITI and every motion direction, and every patch!
+numcond = 0;
+clear conditiondescrip coh trigger triggerFr correctDir patchWithMo
+for o=1:length(par.secs_btw_targs)
+    for c=1:length(par.correctCoh)
+        for p=1:par.numPatches
+            numFr1 = round((par.targetDur+par.secs_btw_targs(o)).*par.FlickFdots(p));
+            correctTransitionFr = round((par.secs_btw_targs(o)+par.correctTransitionTimes{c}/1000)*par.FlickFdots(p))+1;
+            counterTransitionFr = round((par.secs_btw_targs(o)+par.counterTransitionTimes{c}/1000)*par.FlickFdots(p))+1;
+            for m=1:nMD
+                numcond = numcond+1;
+                coh{numcond}(1:nMD,1:numFr1) = 0;
+                for t=1:length(correctTransitionFr)
+                    coh{numcond}(m,correctTransitionFr(t):end) = par.correctCoh{c}(t);
+                end
+                for t=1:length(counterTransitionFr)-1
+                    si = linspace(par.counterCoh{c}(t),par.counterCoh{c}(t+1),counterTransitionFr(t+1)-counterTransitionFr(t)+1);
+                    coh{numcond}(3-m,counterTransitionFr(t):counterTransitionFr(t+1)-1) = si(2:end);
+                end
+
+                trigger{numcond} = [par.CD_DOTS_ON 100+par.correctCoh{c}]; %100+numcond]; % %length(par.correctCoh)*(m-1)];    % what triggers do we send?
+
+                triggerFr{numcond} = [1 correctTransitionFr(1)];    % in what frame do we send a trigger
+                
+                correctDir(numcond) = m;
+                patchWithMo(numcond) = p;
+                conditiondescrip{numcond} = ['Trigger ' num2str(numcond) ': correct coh ' num2str(par.correctCoh{c}) ' counter coh ' num2str(par.counterCoh{c}) ', motion dir ' num2str(par.motionDir(m)) ', ITI ' num2str(par.secs_btw_targs(o)) ', patch ' num2str(p)];
+                dotcolor{numcond} = par.rgbGRAY'*ones(1,size(coh{numcond},2));
+                numperminblock(numcond) = par.condProportn(c);
+            end
+        end
+    end
+end
+par.conditiondescrip = conditiondescrip;
+
+disp(['Number of conditions: ' num2str(numcond)])
+% Trial condition randomization:
+minblock = [];
+for n=1:numcond
+    minblock = [minblock ones(1,numperminblock(n))*n];
+end
+temp = repmat(minblock,[1,ceil(par.numtargets/size(minblock,2))]);
+% Now RANDOMIZE the sequence of trials
+temp = temp(:,randperm(size(temp,2)));      % jumble the columns in temp
+% if numtrials is not evenly divisible by the minimum block length, shave off some trials from the end
+temp(:,par.numtargets+1:end)=[];        % shave off any extra from end
+trialCond = temp;
+
+% *********************************************************************************** START TASK
+% Instructions:
+leftmargin = 0.1;
+Screen('DrawText', window, 'Click left button on mouse for Upward motion.', leftmargin*scresw, 0.2*scresh, 255);
+%Screen('DrawText', window, 'Click right button with right hand for right motion.', leftmargin*scresw, 0.3*scresh, 255);
+if par.numPatches==2
+    Screen('DrawText', window, 'The motion could be in EITHER patch.', leftmargin*scresw, 0.5*scresh, 255);
+end
+Screen('DrawText', window, 'Press any button to begin task.', leftmargin*scresw, 0.9*scresh, 255);
+Screen('Flip', window); 
+
+% Things that we'll save on a trial by trial basis
+[PTBtrigT,PTBtrig,ClickT,Click,RespLR,RespT,RespTcopy] = deal([]);
+nPTBtrig=0;
+numResp=0;
+
+% Waits for the user to press a button.
+[clicks,x,y,whichButton] = GetClicks(whichScreen,0);
+if par.recordEEG, sendtrigger64(par.CD_RESP,port,ioObj), end
+if par.useEL, Eyelink('Message', ['TASK_START']); end
+ClickT(1) = GetSecs;
+Click(1)=whichButton(1);    % The first response will be the one that sets the task going, after subject reads instructions
+
+Screen('DrawText', window, 'Loading...', 0.35*scresw, 0.5*scresh, 255);
+Screen('Flip', window); 
+
+% MAKE THE DOT STIMULI!!
+clear PT
+% First make ALL dot stimuli and store:
+dots = cell(2,par.numtargets);   % This will contain dot locations relative to center of screen, in DEGREES
+for n=1:par.numtargets
+    % First, the patch with the motion (the only patch if numPatches=1)
+    pwm = patchWithMo(trialCond(n));
+    dots{pwm,n}=[]; % every dots cell has three dimensions: dot number x coordinate (x,y) x frame
+    numFr = size(coh{trialCond(n)},2);
+    % First generate dots at random locations on each frame
+    for i=1:numFr
+        for d=1:par.numdots
+            dots{pwm,n}(d,:,i) = [(rand-0.5)*par.dotpatchsize (rand-0.5)*par.dotpatchsize];
+        end
+    end
+    % then add the coherence by selecting dots to move in certain direction relative to
+    % previous frame. A different random set is selected each frame.
+    for i=2:numFr
+        r = randperm(par.numdots);
+        for m=1:nMD
+            ncd = round(par.numdots*coh{trialCond(n)}(m,i)/100);
+            randsel = r(1:ncd);
+            % for the selected dots, move them in a particular direction
+            dots{pwm,n}(randsel,1,i) = dots{pwm,n}(randsel,1,i-1)+cos(par.motionDir(m)*pi/180)*par.dotspeed/par.FlickFdots(pwm);         % x-coordinate
+            dots{pwm,n}(randsel,2,i) = dots{pwm,n}(randsel,2,i-1)-sin(par.motionDir(m)*pi/180)*par.dotspeed/par.FlickFdots(pwm);         % y-coordinate
+            r(1:ncd)=[];
+        end
+        % if it's gone off to the left, wrap it around to the far right
+        dots{pwm,n}(find(dots{pwm,n}(:,1,i)<par.dotpatchsize/2),1,i) = dots{pwm,n}(find(dots{pwm,n}(:,1,i)<par.dotpatchsize/2),1,i)+par.dotpatchsize;
+        % if it's gone off to the right, wrap it around to the far left
+        dots{pwm,n}(find(dots{pwm,n}(:,1,i)>par.dotpatchsize/2),1,i) = dots{pwm,n}(find(dots{pwm,n}(:,1,i)>par.dotpatchsize/2),1,i)-par.dotpatchsize;
+        % if it's gone off to the bottom, wrap it around to the top
+%         dots(find(dots(:,2,i)<par.dotpatchsize/2),1,i) = dots(find(dots(:,2,i)<par.dotpatchsize/2),1,i)+par.dotpatchsize;
+        % if it's gone off to the top, wrap it around to the bottom
+%         dots(find(dots(:,2,i)>par.dotpatchsize/2),1,i) = dots(find(dots(:,2,i)>par.dotpatchsize/2),1,i)-par.dotpatchsize;
+    end
+    % Finally, go through the dots and get rid of the dots falling outside the
+    % circle - put them off the screen.
+    for i=1:numFr
+        for d=1:par.numdots
+            if sqrt(sum(dots{pwm,n}(d,:,i).^2)) > par.dotpatchsize/2
+                dots{pwm,n}(d,:,i) = 2*center/deg2px + 0.01;
+            end
+        end
+    end
+    
+    PT{n}=[];
+    % Make the pulse train:
+    PT1 = [];
+    for i=1:numFr
+        PT1 = [PT1 ; i*ones(nrefON(pwm),1);zeros(nrefOFF(pwm),1)];
+    end
+    PT{n}(:,pwm) = PT1;
+    
+    if par.numPatches==2
+        % other patch:
+        op = 3-patchWithMo(trialCond(n));
+        dots{op,n}=[];
+        numFr = round(size(coh{trialCond(n)},2)*par.FlickTdots(pwm)/par.FlickTdots(op));
+        % First generate dots at random locations on each frame
+        for i=1:numFr
+            for d=1:par.numdots
+                dots{op,n}(d,:,i) = [(rand-0.5)*par.dotpatchsize (rand-0.5)*par.dotpatchsize];
+            end
+        end
+        for i=1:numFr
+            for d=1:par.numdots
+                if sqrt(sum(dots{op,n}(d,:,i).^2)) > par.dotpatchsize/2
+                    dots{op,n}(d,:,i) = 2*center/deg2px + 0.01;
+                end
+            end
+        end
+        PT1 = [];
+        for i=1:numFr
+            PT1 = [PT1 ; i*ones(nrefON(op),1);zeros(nrefOFF(op),1)];
+        end
+        PT{n}(:,op) = PT1;
+    end
+    
+end
+
+
+%%%%%%%%%%%%%%%%%%%% START TRIALS
+
+% initial lead-in:
+Screen('FillRect',window, 255, fixRect);
+Screen('Flip', window);
+WaitSecs(par.leadintime/1000);
+
+% START STIMULATION
+ButtonDown=0;
+for n=1:par.numtargets
+    pwm = patchWithMo(trialCond(n));    % patch with motion (only one if one patch)
+    op = 3-patchWithMo(trialCond(n));
+    % DOT MOTION
+    trigs_sent = 0;
+    for i=1:size(PT{n},1)   % PT is pulse train. 'i' here goes through every refresh of the monitor
+
+        for p=1:par.numPatches
+            if PT{n}(i,p)
+                Screen('DrawDots', window, dots{p,n}(:,:,PT{n}(i,p))'*deg2px, par.dotsize, dotcolor{trialCond(n)}(:,min([PT{n}(i,p) size(dotcolor{trialCond(n)},2)])), round(center+par.patchloc(p,:).*[1 -1]*deg2px));
+            end
+        end
+        Screen('FillRect',window, 255, fixRect);    % put up fixation on top
+            
+        % Now send triggers when they need to be sent
+        trg = find(triggerFr{trialCond(n)}==PT{n}(i,pwm));
+        if ~isempty(trg)
+            if trg>trigs_sent
+                if par.recordEEG, sendtrigger64(trigger{trialCond(n)}(trg),port,ioObj); end
+                if par.useEL, Eyelink('Message', ['TRIAL' num2str(n) '_' num2str(trigger{trialCond(n)}(trg))]); end
+                nPTBtrig = nPTBtrig+1;
+                [VBLTimestamp PTBtrigT(nPTBtrig)] = Screen('Flip', window);
+                PTBtrig(nPTBtrig) = trigger{trialCond(n)}(trg);
+                trigs_sent = trigs_sent+1;
+            else
+                Screen('Flip', window);
+            end
+            checkButton
+        else
+            Screen('Flip', window);
+            checkButton
+        end
+    end
+end
+% And then finish out with half of the first trial (only incoherent bit),
+% so it doesn't end on a target
+n=1;
+pwm = patchWithMo(trialCond(n));
+op = 3-patchWithMo(trialCond(n));
+% DOT MOTION
+trigs_sent = 0;
+for i=1:round(size(PT{n},1)/3)
+   
+    for p=1:par.numPatches
+        if PT{n}(i,p)
+            Screen('DrawDots', window, dots{p,n}(:,:,PT{n}(i,p))'*deg2px, par.dotsize, dotcolor{trialCond(n)}(:,min([PT{n}(i,p) size(dotcolor{trialCond(n)},2)])), round(center+par.patchloc(p,:).*[1 -1]*deg2px));
+        end
+    end
+    Screen('FillRect',window, 255, fixRect);
+
+    trg = find(triggerFr{trialCond(n)}==PT{n}(i,pwm));
+    if ~isempty(trg)
+        if trg>trigs_sent
+            if par.recordEEG, sendtrigger64(trigger{trialCond(n)}(trg),port,ioObj); end
+            if par.useEL, Eyelink('Message', ['TRIAL' num2str(n) '_' num2str(trigger{trialCond(n)}(trg))]); end
+            nPTBtrig = nPTBtrig+1;
+            [VBLTimestamp, PTBtrigT(nPTBtrig)] = Screen('Flip', window);
+            PTBtrig(nPTBtrig) = trigger{trialCond(n)}(trg);
+            trigs_sent = trigs_sent+1;
+        else
+            Screen('Flip', window);
+        end
+        checkButton
+    else
+        Screen('Flip', window);
+        checkButton
+    end
+end
+
+% FEEDBACK
+response_deadline = par.targetDur+0.5;  % in seconds, OFFLINE response deadline for counting performance
+    cohmo_trigs = find(PTBtrig>100);
+if length(cohmo_trigs)~=length(trialCond), error('trigger number mismatch!!'); end
+clear RTs acc 
+numHits = 0;
+for n=1:length(cohmo_trigs)
+    RTs(n) = nan;
+    acc(n) = 0;
+    stimtime = PTBtrigT(cohmo_trigs(n));
+    nextresp = find(RespT>stimtime & RespT<stimtime+response_deadline,1);
+    if ~isempty(nextresp)
+        RTs(n) = RespT(nextresp) - stimtime;
+        %RespTcopy(n) = [];
+        numHits = numHits + 1;
+        if RespLR(nextresp)==correctDir(trialCond(n))
+            acc(n)=1;
+        end
+    end
+end
+
+%figure; hist(RTs*1000,[0:100:3000])
+%title(['MEDIAN RT: ' num2str(median(RTs)*1000)])
+
+disp(['Accuracy: ' num2str(round(mean(acc)*100)) '%'])
+disp([num2str(length(find(isnan(RTs)))) ' Misses'])
+
+%False Alarms
+numFA = length(RespT)- numHits;
+%disp([num2str(length(RespTcopy)) 'False Alarms'])
+
+%Old Display
+%Screen('DrawText', window, ['On this block you got ' num2str(round(mean(acc)*100)) '% correct.'], txtstart, 0.25*scresh, 255);
+%Screen('DrawText', window, ['You entirely MISSED ' num2str(length(find(isnan(RTs)))) ' trials out of the ' num2str(length(RTs)) '.'], txtstart, 0.35*scresh, 255);
+
+%New Display
+txtstart = 0.1*scresw;
+hitRate = round(mean(acc)*100);
+missRate = round(100*length(find(isnan(RTs)))/par.numtargets);
+
+Screen('DrawText', window, ['On this block you had: '], txtstart, 0.25*scresh, 255);
+Screen('DrawText', window, ['A Hit Rate of ' num2str(round(mean(acc)*100)) '%.'], txtstart, 0.35*scresh, 255);
+Screen('DrawText', window, ['A Miss Rate of ' num2str( round(100*length(find(isnan(RTs)))/par.numtargets) ) '%.'], txtstart, 0.45*scresh, 255);
+Screen('DrawText', window, [num2str(numFA) ' False Alarms.'], txtstart, 0.55*scresh, 255);
+
+Screen('DrawText', window, ['Click to Exit'], txtstart, 0.70*scresh, 255);
+Screen('Flip', window); 
+GetClicks(whichScreen,0);
+
+% toc
+save([par.runID],'ClickT','Click','nPTBtrig','PTBtrigT','PTBtrig','RespT','RespLR','trialCond','coh','dotcolor','trigger','triggerFr','correctDir','patchWithMo','par', 'hitRate', 'missRate', 'numFA')
+save parDC par
+sca;
+ShowCursor;
+catch ME
+    sca
+    ShowCursor;
+    rethrow(ME)
+end
+%cleanup
+
