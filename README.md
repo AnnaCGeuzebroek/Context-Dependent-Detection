@@ -8,7 +8,7 @@ For an excellent review on neurally-informed modelling see:
 
 
 # contextAnalysis
-Preprocessed data can be found at DOI: /10.17605/OSF.IO/YJVKU
+Preprocessed data can be found at DOI: [/10.17605/OSF.IO/YJVKU](https://osf.io/yjvku/?view_only=7ed5aee5d09a4d5ca13de1ba169b0588)
 
 # contextModelling
 
