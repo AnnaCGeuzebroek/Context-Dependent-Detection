@@ -26,7 +26,9 @@
 %   2)  Check if the triggers for the EEG are sent properly. You will have
 %       to set the port to the one you are using. 
 % DEPENDABLES:
-%   
+%   checkButton
+%   sendtrigger64
+%   Psychtoolbox
 %
 % UNFORTUANTLY DOT POSITION WAS NOT SAVED ORGINIALLY!!!
 
