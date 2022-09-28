@@ -1,12 +1,11 @@
 function [Quality, figInfo, tbl] = handmess(obj, plotName, Elec, trangeTopo, TargetOrResponse, AverageOrSlope, MorletOrsFFT, freqRange)
 %% [Quality, figInfo, tbl] = plotERP(obj, plotName, Elec, plotThis, plotComb, grouping, trangeTopo, TargetOrResponse, MorletOrsFFT, AverageOrSlope)
-% function will extract topoplot to get best electrodes, if
-% Elec is not defined. Topoplot uses trangeTopo to identify the
-% range and you can either choose TargetOrResponse and
-% AverageOrSlope. It further plots target and response-locked
-% average plot using the selected electrodes. Not this
-% standardly baseline-correct the data!
-% Parameters:
+% Similar to topoplotting in plotERP. It was not clearly instructed with what hand 
+% participants had to respond and fortuantly after checking people seem to have used
+% there dominated hand (two left-handed). To determine this, we used Beta lateralization 
+% (e.g. 16-30 Hz) as well as lateralization of the preresponse slope of the LRP.
+%
+% Input parameters:
 %   MethodUsed          =  gives the possibility to just use
 %                          1) the pre-set electrodes
 %                          2) get the 3 best electrodes with highest SNR
@@ -28,12 +27,7 @@ function [Quality, figInfo, tbl] = handmess(obj, plotName, Elec, trangeTopo, Tar
 % check for parameters.
 if ~exist('TargetOrResponse', 'var'); TargetOrResponse = 2; end  % standard on response-locked
 if ~exist('AverageOrSlope', 'var');   AverageOrSlope = 1; end    % standard on average
-if ~exist('MorletOrsFFT', 'var');   MorletOrsFFT = 0; end    % standard on average
-
-% create low-pass filter for plotting purposes only!
-Fs    = obj.eeg.SampleRate;
-fco   = 6;
-[b,a] = butter(2,fco*2/Fs);
+if ~exist('MorletOrsFFT', 'var');     MorletOrsFFT = 0; end      % standard on average
 
 trangeBaseline = obj.eeg.epochPlot > obj.eeg.baseline(1) & obj.eeg.epochPlot < obj.eeg.baseline(2);
 
@@ -44,19 +38,16 @@ if ~exist(currOutput, 'dir'); mkdir(currOutput); end
 currTopo = fullfile(currOutput, [plotName 'Topo_HPF' num2str(obj.eeg.HPFcutoff) '_CSD' num2str(obj.eeg.applyCSD) '.mat']);
 
 % preset figure save folder
-averageFolder = fullfile(obj.figFolder,  'groupAverage', ['HPF' num2str(obj.eeg.HPFcutoff) '_CSD' num2str(obj.eeg.applyCSD) '/']);
-if ~exist(averageFolder, 'dir'); mkdir(averageFolder); end
-
 indivFolder = fullfile(obj.figFolder,  'individualPlots', ['HPF' num2str(obj.eeg.HPFcutoff) '_CSD' num2str(obj.eeg.applyCSD) '/HandMess/']);
 if ~exist(indivFolder, 'dir'); mkdir(indivFolder); end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% -------------- CREATE AVERAGE TOPOPLOT  --------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% for electrode selection, we first create an average topoplot.
+% to solve the 'hand mess', we first create an individual topoplot.
 % This allows us to visualize and properly chooise the cluster
 % of electrodes the check.
-% pre-set filename
+
 if TargetOrResponse == 1
     trangeTopo = obj.eeg.targetEpoch > trangeTopo(1) & obj.eeg.targetEpoch < trangeTopo(2);
 elseif TargetOrResponse == 2
@@ -84,7 +75,6 @@ for indPP = [11 14]; %1:length(obj.ppNames)
     % Baseline-correct the data for the target and
     % response. Again not for the ERPwhole
     ERP = ERP - repmat(nanmean(ERP(:, trangeBaseline, :),2), 1, size(ERP,2), 1);
-    
      
     if MorletOrsFFT ~= 0
         clear down*
@@ -125,28 +115,7 @@ for indPP = [11 14]; %1:length(obj.ppNames)
     figure('Units', 'Normalized', 'OuterPosition', [0 0 1 1]);
     for indBlock = 1:length(obj.order{indPP})
         subplot(4, ceil(length(obj.order{indPP})/4), indBlock)
-        topoplot(  nanmean(ERPTopo(1,:,orderBlocks == indBlock, indPP),3),obj.eeg.chanlocs); % , 'electrodes', 'labels'
-%         title()
-%         ChanPlot = {obj.eeg.ChannelsName{channels}};
-%         keep = [];
-%         for kk = 1:length(topoFigInd{acc}.Parent.Children)
-%             for indChan = 1:length(ChanPlot)
-%                 try
-%                     if ~strcmpi(topoFigInd{acc}.Parent.Children(kk).String(~isspace(topoFigInd{acc}.Parent.Children(kk).String)), ChanPlot{indChan})
-%                         keep(kk, indChan) = 0;
-%                     else
-%                         keep(kk, indChan) = 1;
-%                     end
-%                 end
-%             end
-%         end
-%         
-%         topoFigInd{acc}.Parent.Children( find(~sum(keep,2))').delete
-%         for indChan = 1:length(find(sum(keep,2)))
-%             topoFigInd{acc}.Parent.Children(indChan).String = '*';
-%             topoFigInd{acc}.Parent.Children(indChan).FontSize = obj.figLayOut.letterSize;
-%         end
-        
+        topoplot(  nanmean(ERPTopo(1,:,orderBlocks == indBlock, indPP),3),obj.eeg.chanlocs); % , 'electrodes', 'labels'        
     end
     plotSave(gca,  [obj.ppNames{indPP} '_' plotName '.png'], indivFolder, [25 20]);
 end
