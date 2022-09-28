@@ -6,7 +6,7 @@ Code as described in Geuzebroek et al. (2022), allowing the extraction of behavi
 
 For an excellent review on neurally-informed modelling see:
 
-O’Connell, R.G., Shadlen, M.N., Wong-Lin, K., & Kelly, S.P. (2018). Bridging Neural and Computational Viewpoints on Perceptual Decision-Making. * Trends in neurosciences.* [link](https://www.sciencedirect.com/science/article/pii/S0166223618301668)
+O’Connell, R.G., Shadlen, M.N., Wong-Lin, K., & Kelly, S.P. (2018). Bridging Neural and Computational Viewpoints on Perceptual Decision-Making. *Trends in neurosciences*. [link](https://www.sciencedirect.com/science/article/pii/S0166223618301668)
 
 ## Presentation code
 Code is provided to run a continuous detection version of the random dot motion task were participants continuously monitor a cloud of white, randomly moving dots for intermittent targets defined as a step change from random to coherent upwards dot motion. During periods of incoherent motion (0% motion coherence), all dots were randomly displaced to a new location throughout the patch on each frame. Coherent dot motion was accomplished by displaying a certain percentage of randomly selected dots in a direction relative to their previous location within each frame. Code is depending utilizing Psychtoolbox functions. 
