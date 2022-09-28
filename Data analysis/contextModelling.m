@@ -17,7 +17,6 @@
 %   conditions/epochs and will allow and get the EEG data needed for
 %   constraining the NI models. 
 %   2) dataModelling 
-%   2) getConditions
 
 clear
 clc
