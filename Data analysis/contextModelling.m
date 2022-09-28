@@ -1,22 +1,43 @@
-%% Behaviour, EEG data and Eye movement data analysis.
-% Continue work on the data set collected in by Craddock, 2016:
-% 'Electrophysiological and behavioural indices of decision criterion
-% adjustments across context of weak and strong evidence.
-% The High-density EEG data are recorded in sampling rate of 512Hz
-% using a 128-channel EEG BioSemi in University College Dublin.
+%% Behaviorual and neurally-informed modelling
+% Data collected Hannah Craddock for her Master's thesis, 2016:
+%   'Electrophysiological and behavioural indices of decision criterion
+%   adjustments across context of weak and strong evidence.'
 %
-% Depending on:
-%   1) EEGLAB (including Biosig extention).
-%   2) CSD toolbox and lay-out (https://psychophysiology.cpmc.columbia.edu/software/csdtoolbox/).
-%   3) findNoisyChannels (see https://github.com/VisLab/EEG-Clean-Tools)
-%   4) Brewermap (to get colors for plot. Can be easily replaced with just choosing colours)
-%   5) panels 
+% Current code is written by A.C. Geuzebroek and part of:
+%   Geuzebroek AC, Craddock H, O’Connell RG, & Kelly SP (2022).
+%   Balancing true and false detection of intermittent sensory targets
+%   by adjusting the inputs to the evidence accumulation process (https://biorxiv.org/cgi/content/short/2022.09.01.505650v1)
+%
+% In short, participants were asked to continous monitor a cloud of randomly moving
+% dots for intermittered target defined as upwards coherent moving dots.
+% Afterwhich they were asked to response as fast and accurate as possible.
+% Difficulty context was manipulated with:
+%   1) Hard  (25% motion coherence)
+%   2) Easy  (70% motion coherence)
+%   3) Mixed (25% and 70% motion coherence with equal probabiltiy).
+% 
+% Code requires the data to be structured as follows:
+%   InputFolder     = BASEFOLDER\Data\Raw\
+%       Participant folder = BASEFOLDER\Data\Raw\PPNAME\ (note never use initials!)
+%           EEG folder           = BASEFOLDER\Data\Raw\PPNAME\EEG data\
+%           Eyelink folder       = BASEFOLDER\Data\Raw\PPNAME\Eyelink data\
+%           Trial files folder   = BASEFOLDER\Data\Raw\PPNAME\Trial files\
+
 % costum-made code:
 %   1) dataAnalysis (object to access all the functions, OR get data
 %   structure set-up as see below) --> here the data is cut to get the
 %   conditions/epochs and will allow and get the EEG data needed for
 %   constraining the NI models. 
 %   2) dataModelling 
+%
+%
+% Depending on:
+%   1) EEGLAB (including Biosig extention).
+%   2) CSD toolbox and lay-out.
+%   3) findNoisyChannels
+%   4) Brewermap (to get colors for plot. Can be easily replaced with just choosing colours)
+%   5) panels
+%   6) fminsearchbnd
 
 clear
 clc
@@ -27,12 +48,14 @@ clear global
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % set all paths.
 if strcmp(computer, 'PCWIN64')
-    inputFolder = 'C:\Users\eng\Documents\2. Postdoc_Kelly\Project 5 - Neural correlates of static and dynamic decision-bound adjustments\Project 5.1 - Signatures of bound adjustment\Data';
+    error('Please set your data folder')
+    inputFolder = 'YOURFOLDER\Data';    % add base folder of data. 
     addpath(genpath('C:\Users\eng\Documents\MATLAB\dataAnalysis'))
-    addpath(genpath('C:\Users\eng\Documents\2. Postdoc_Kelly\Project 5 - Neural correlates of static and dynamic decision-bound adjustments\Project 5.1 - Signatures of bound adjustment\Matlab\Analysis'))
     
+    error('Please add the path to EEGLAB!')
+
     if ~exist('eeglab', 'file')
-        run('C:\Users\eng\Documents\MATLAB\EEGLAB\eeglab'); close all;
+        run('YOURPATHTOEEGLAB\EEGLAB\eeglab'); close all;
     end
 end
 
