@@ -1,53 +1,71 @@
-% Make urgency function
-load('grandAverageBetaERD.mat')
-tr = grandAverageResponse.timeSerie; 
-betaResp = [grandAverageResponse.WeakConstant grandAverageResponse.StrongConstant grandAverageResponse.WeakMixed grandAverageResponse.StrongMixed];
-figure; plot(tr,betaResp) 
+%% Create urgency signal
+% Oscillations in the higher Beta band (16:30) are taken as indicators of motor preperations
+% and are use  to constrain our neurally-informed models, the grand-average Beta amplitude 
+% waveform in the 8 sec ITI was taken (Calculated with dataAnalysis.m) and normalised according
+% to the motor execution threshold indexed by average pre-response beta in a given condition,
+% and a 2nd-order polynomial was then fitted to capture the smooth urgency trend relative to threshold
+%
+% NOTE for future data analysis or Neurally-informed modelling this is intergrated and adapted 
+% to be used flexibiliy in dataAnalysis.m
 
-for c=1:4
-    th(c) = betaResp(find(tr>=-67,1),c);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% -------------------------    Threshold   -----------------------------
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% first get grandAverageBeta response-locked data to determine the threshold.
+
+load('grandAverageBetaERD.mat') % find in /Context-Dependent-Detection/Data analysis/Dependables/
+timeSeries = grandAverageResponse.timeSerie; 
+response = [grandAverageResponse.WeakConstant grandAverageResponse.StrongConstant grandAverageResponse.WeakMixed grandAverageResponse.StrongMixed];
+
+figure; 
+plot(timeSeries, response) 
+
+for indCond = 1:4
+    threshold(indCond) = response(find(timeSeries>=-67,1), indCond);
 end
-th(3)=mean(th(3:4)); th(4)=[]; % collapse across the two threshold levels for Mixed.
 
-load('grandAverageBetaERD_8secsITI.mat')
+threshold(3) = mean(threshold(3:4)); threshold(4)=[]; % collapse across the two threshold levels for Mixed.
 
-ti = grandAverageERD.timeSeries;
-betaITI = [grandAverageERD.WeakContext-th(1) grandAverageERD.StrongContext-th(2) grandAverageERD.MixedContext-th(3)];
-% betaITI = [grandAverageResponse.WeakConstant-th(1) grandAverageResponse.StrongConstant-th(2) nanmean([grandAverageResponse.WeakMixed grandAverageResponse.StrongMixed],2)-th(3)];
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% -------------------------    ITI dynamics   --------------------------
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% First get grandAverageBeta target-locked data to created the urgency signal.
+ load('grandAverageBetaERD_8secsITI.mat')
 
-figure; plot(ti,betaITI)
-legend
-grid
-del = find(isnan(betaITI(:,1)) | ti>0);
-ti(del)=[];
-betaITI(del,:)=[];
+timeSeries = grandAverageERD.timeSeries;
+betaITI = [grandAverageERD.WeakContext-threshold(1) grandAverageERD.StrongContext-threshold(2) grandAverageERD.MixedContext-threshold(3)];
+
+figure; hold on;
+plot(timeSeries, betaITI)
+
+% remove NaNs and everything after the target-onset.
+del = find(isnan(betaITI(:,1)) | timeSeries > 0); 
+timeSeries(del) = [];
+betaITI(del,:)  = [];
+
+% Fit 2-order polynomial.
 b = [];
-for c=1:3
-    b(:,c) = polyfit(ti,betaITI(:,c),2);
+for indCond = 1:3
+    b(:,indCond) = polyfit(ti,betaITI(:,indCond),2);
+    plot(timeSeries, b(1,indCond)*timeSeries.^2 + b(2,indCond)*timeSeries + b(3,indCond))
 end
 
-hold on
-for c=1:3
-    plot(ti,b(1,c)*ti.^2+b(2,c)*ti+b(3,c))
-end
 
 % Make a normalised urgency function then for the model:
-f=60;
-dt=1/f;
-tm = [-7500:dt*1000:1500];
-for c=1:3
-    urg(:,c) = b(1,c)*tm.^2+b(2,c)*tm+b(3,c);
-    urg(find(tm>0),c) = urg(find(tm>=0,1),c);
+f  = 60;
+dt = 1/f;
+timeSeries = [-7500:dt*1000:1500];
+for indCond = 1:3
+    urg(:,c) = b(1,indCond)*timeSeries.^2 + b(2,indCond)*timeSeries + b(3,indCond);
+    urg(find(timeSeries>0), indCond) = urg(find(timeSeries>=0, 1),indCond);
 end
 
 urg = urg./max(max(urg));
 urg = 1-urg;
 
 figure; hold on
-plot(tm,urg)
-
-% save urg urg tm
+plot(timeSeries,urg)
 
 % and finally just to play around with pink noise:
-urg = urg+pinknoise(size(urg))
-plot(tm,urg)
+% urg = urg+pinknoise(size(urg))
+% plot(timeSeries,urg)
