@@ -30,7 +30,6 @@
 %   3) findNoisyChannels
 %   4) Brewermap (to get colors for plot. Can be easily replaced with just choosing colours)
 %   5) panels
-%   6) fminsearchbnd
 
 clear
 clc
