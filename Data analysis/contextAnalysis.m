@@ -16,12 +16,13 @@
 %   2) Easy  (70% motion coherence)
 %   3) Mixed (25% and 70% motion coherence with equal probabiltiy).
 % 
-% Code requires the data to be structured as follows:
-%   InputFolder     = BASEFOLDER\Data\Raw\
-%       Participant folder = BASEFOLDER\Data\Raw\PPNAME\ (note never use initials!)
-%           EEG folder           = BASEFOLDER\Data\Raw\PPNAME\EEG data\
-%           Eyelink folder       = BASEFOLDER\Data\Raw\PPNAME\Eyelink data\
-%           Trial files folder   = BASEFOLDER\Data\Raw\PPNAME\Trial files\
+% Code requires you to download the preprocessed data at:
+% https://osf.io/yjvku/?view_only=7ed5aee5d09a4d5ca13de1ba169b0588
+%
+% Add this data in the follow way:
+%   InputFolder     = BASEFOLDER\Data\Processed\
+%       Participant folder = BASEFOLDER\Data\Processed\PPNAME\ (note never use initials!)
+%           EEG folder           = BASEFOLDER\Data\Processed\EEG data\PPNAME\
 %
 %
 % Depending on:
@@ -56,25 +57,19 @@ end
 blockRandomized = 1; % yes: easy/hard/mixed
 numRTBins  = 2; TimeOnTask = 0; TimeOnExperiment = 0;
 
-% Set conditions, here this is left or right tilted as well as inter-trial
-% duration. For initial purposes we do not have to look at these, except
-% that we bin the reaction times for each conditions to account of possible
-% effects.
+% Set conditions, here this is:
+%   Context (Fixed vs. Mixed)
+%   Coherence level (25 vs. 70)
 % IMPORTANT condNames should refer to the way that it was saved in the
 % experiment. This can be checked by loading the trial information file and
-% see how it will be set in the workspace. Same is happening with
-% conditions, e.g. for the left vs. right tilded contrast change, it is
-% saved as trialLR as condNames and 1 for left and 2 for right in the so-called
-% trialMatrix (matrix that will track the experimental conditions).
+% see how it will be set in the workspace. As the presentation code was written
+% with other analysis code in might, it requires a quick for-loop to actually add 
+% condition and coherence (see line TODO).
+
 conditions{1}  = [1 2]; % easy difficult mixed
 condNames{1}   = 'condition';
 conditions{2}  = [25 70];
 condNames{2}   = 'coherence';
-
-% get your color scheme set here
-tmp =  flipud(brewermap(4,'RdBu')); ColoursCond12  = [128 205 193; 1 133 113; 223 194 125; 166 97 26]/255;% [brewermap(2, 'Greens'); tmp([2 1],:)];
-ColoursCond3 =  brewermap(4,'Greys'); ColoursCond3 = ColoursCond3-0.16;
-
 
 % preset the signal processing object.
 parameters  = dataAnalysis.getInstance();
@@ -82,12 +77,13 @@ parameters  = dataAnalysis.getInstance();
 % set a couple of standard parameters within this object.
 parameters.system = 'bioSemi';   % Object will choice the approtiated loading function of EEGLAB
 parameters.analysisEEG      = 1; % Analyse EEG (obviously we want to look at this)
+
 parameters.analysisEyelink  = 0;
 parameters.analysisEOG      = 1; % Use additionally EOG electrodes and Frontal electrodes
-                                 % to look for blinks and
-                                 % exclude trials with blinks (We do this to prevent
+                                 % to look for blinks and exclude trials with blinks (We do this to prevent
                                  % any possible effects of the blink on the sensory perception)
 parameters.analysisEMG = 0;
+
 parameters.numTrials   = 24; % number of trials per block.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -100,20 +96,22 @@ parameters.numTrials   = 24; % number of trials per block.
 % possible that the conditions information are in the EEG files. So here
 % simply put all the par and other parameters of each participant away.
 parameters.getInformation(0, inputFolder, conditions, condNames, blockRandomized);
-clear cond* *Folder
+clear cond* *Folder block*
 
-
+% As the inter-trial-interval length is an interesting and crucial part of the
+% this experiment, we straight away add this as 
 % recode the experiment.trialCond from 1:4 as 1:2 is no gap, 4:6 is gap. As
 % well as 1,2,3 being [2 4 6] ITI respectively.
 parameters.conditions{3}   = [2 4 6 8];
 parameters.condNames{3}    = 'ITI';
 
-parameters.stim.lengthITI  = [2 4 6 8];
-parameters.stim.namesITI   = 'ITI';
 
-% NOTE below was needed to created the right trialMatrix construction, this
-% has already been preformed in the epoched data
-%{
+
+% NOTE below was needed to created the right trialMatrix construction, usually,
+% this can be done simply in epoching through setting the right condNames before
+% calling parameters.getInformation. If designing or writing your own presenation
+% code this can be easily prevented by having a save parameters refering to the 
+% conditions structure. 
 for indPP = 1:length(parameters.ppNames)
     for indBlock = 1:parameters.numBlocks(indPP)
         
@@ -121,7 +119,7 @@ for indPP = 1:length(parameters.ppNames)
 
         if length(parameters.experiment{indPP}{indBlock}.par.correctCoh) == 1
             parameters.experiment{indPP}{indBlock}.coherence  = parameters.experiment{indPP}{indBlock}.par.correctCoh{:};
-            parameters.experiment{indPP}{indBlock}.condition  = 1;%find(parameters.conditions{2} == parameters.experiment{indPP}{indBlock}.par.correctCoh{:});
+            parameters.experiment{indPP}{indBlock}.condition  = 1;
             
             for indITI = 1:length(parameters.conditions{3})
                 tmpITI(parameters.experiment{indPP}{indBlock}.trialCond == indITI) = parameters.conditions{3}(indITI);
@@ -142,21 +140,61 @@ for indPP = 1:length(parameters.ppNames)
         parameters.experiment{indPP}{indBlock}.ITI = tmpITI;
     end
 end
-%}
 
-% assuming that parameters are the same for all participants and with all
-% blocks
-parameters.DetectOrDisc = 0;
 
-parameters.stim.refreshRate  = 60;   % parameters.experiment{1}{1}.par.videoFrate;	 % Screens refreshRate
-parameters.stim.duration     = 1000; % parameters.experiment{1}{1}.par.targetDur.*1000;    % duration of the stimulus
-parameters.stim.freqSSVEP    = 15;
-parameters.stim.epoch        = [-1800 2500];
+% Set everything for the stimulus presentation. 
+% Assuming that parameters are the same for all participants and 
+% within blocks.
+parameters.DetectOrDisc = 0;         % 0 as for Detection task
 
-parameters.stim.RTdeadLine = [-1.8 1.65];
-parameters.stim.RTCutOff   = 0.25; % only include reaction times after the gap offset.
-parameters.stim.FACutOff   = -1.5;
+parameters.stim.refreshRate  = 60;   % or parameters.experiment{1}{1}.par.videoFrate;	      % in Hz.,  Screens refreshRate
+parameters.stim.duration     = 1000; % or parameters.experiment{1}{1}.par.targetDur.*1000;    % in ms., duration of the stimulus (NOTE CHANGE TO SEC.)
+parameters.stim.freqSSVEP    = 15;   % in Hz (SSVEP), is however not task related 
+                                     % and therefore only used to determine window size e.g.
+                                     % have whole cycles presents.
+parameters.stim.epoch        = [-1800 2500];  % in ms., duration of the stimulus (NOTE CHANGE TO SEC.)
+
+parameters.stim.timing     = 'past';      % TODO change
+parameters.stim.RTdeadLine = [-1.8 1.65]; % TODO check this -1.8 when past
+parameters.stim.RTCutOff   = 0.25;   % only include reaction times after the gap offset.
 parameters.stim.FA         = 1;
+parameters.stim.FACutOff   = [];
+
+parameters.stim.lengthITI  = [2 4 6 8];
+parameters.stim.namesITI   = 'ITI';
+
+%% %%%%%%%%%%%%%%%%%%%% Pre-set figure parameters    %%%%%%%%%%%%%%%%%%%%%%
+% get your color scheme set here
+ColoursCond12  = [128 205 193; 1 133 113; 223 194 125; 166 97 26]/255;  % Context by Motion coherence
+ColoursCond3 =  brewermap(4,'Greys'); ColoursCond3 = ColoursCond3-0.16; % ITI
+
+parameters.figLayOut.letterSize  = 9;
+parameters.figLayOut.letterType  = 'Arial';
+parameters.figLayOut.lineWidth   = 1.2;
+parameters.figLayOut.lineType    = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-'};
+parameters.figLayOut.legNames{1} = {'Constant', 'Mixed'};
+parameters.figLayOut.legTitle{1} = 'Context';
+
+parameters.figLayOut.legNames{2} = {'Weak', 'Strong'}; % shift as they are 'order' by strength
+parameters.figLayOut.legTitle{2} = 'Evidence strength';
+
+parameters.figLayOut.legNames{3} = {'2', '4', '6', '8'};
+parameters.figLayOut.legTitle{3} = 'ITI duration';
+
+parameters.figLayOut.legends = {'Weak Context', 'Strong Context', 'Mixed (Weak)', 'Mixed (Strong)'};
+
+parameters.figLayOut.plotCI      = 0.05; % get shaded area of not.
+parameters.figLayOut.removeInter = 1;
+parameters.figLayOut.saveDim     = [5 11];
+parameters.figLayOut.colours     = ColoursCond12;
+
+% these range are used for the initial plots to explore the full range.
+% We later zoomed in to the new ranges to get a better view. 
+parameters.figLayOut.targetLim   = [-200 0:500:1000];
+parameters.figLayOut.responseLim = [-400 0 200];
+parameters.figLayOut.plotRT      = [];
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% --------------    EEG PROCESSING PARAMETERS    -------------------------
@@ -179,11 +217,13 @@ for indChan = 1:parameters.eeg.NumberOfChannels
 end
 elab(end+1)='FCz'; clear ind*
 
-parameters.eeg.ChannelsName   	= elab;
+parameters.eeg.ChannelsName   	= elab; 
 parameters.eeg.SampleRate   	= 512;	% EEG sample rate
 
 parameters.eeg.chanlocs         = chanlocs;	% electrode locations
 parameters.eeg.transChanlocs	= load('CSD_coords.mat');	% electrode locations
+clear elab chanlocs
+
 
 parameters.eeg.ampSaturation	= 3276;	% What's the maximum limiting amplitude of the amplifiers, to detect saturation?
 
@@ -195,7 +235,7 @@ parameters.eeg.applyFindDCcorrect   = 0;
 parameters.eeg.badChannel   = 1;	% set on one if you want to apply bad channel selection and interpolation before epoching.
 parameters.eeg.applyLPF 	= 1;    % attention here that the lowpass filter is different in New York as in Ireland.
 parameters.eeg.cuttoffLPF	= 38;	% 38 cut-off threshold for low-pass filter
-% low-pass filter will be different as NY has 60 hz electricity rate.
+                                    % low-pass filter will be different as NY has 60 hz electricity rate.
 parameters.eeg.LHamming     = 77;   % 77
 parameters.eeg.applyHPF     = 0;    % look at raw data if is nescessary.
 parameters.eeg.simonHPF     = 0;
@@ -209,7 +249,7 @@ parameters.eeg.intArtifact   = 1;
 parameters.eeg.channelVEOG   = 1:2;
 parameters.eeg.channelHEOG   = 3:4;
 
-parameters.eeg.timing = 'past';
+parameters.eeg.timing = 'past'; % TODO CHECK
 
 %--------------- set triggers and EPOCHS definition -----------------------
 % The trigger codes we used for the different events were as follows:
@@ -220,7 +260,7 @@ parameters.triggers.response    = [12 13];      % left vs. right
 
 % EPOCH DEFINITION
 parameters.eeg.epochLock = parameters.triggers.stimulusON;
-parameters.eeg.baseline  = 0 + [-1 1]*1000/parameters.stim.freqSSVEP;  
+parameters.eeg.baseline  = 0 + [-1 0]*1000/parameters.stim.freqSSVEP;  
 
 % Initially we set a rather larger epoch based on the stimulus definitition
 % 'parameters.stim.epoch'. This is used to cut out a larger epoch to apply
@@ -270,7 +310,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 parameters.epochingData;
 % parameters.applyCSD; % NOTE already applied in the epoched EEG data
-keyboard
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% ---------------------   Behavioural data    -----------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -279,43 +319,6 @@ keyboard
 % peak should be highly linked with the reaction time.
 parameters.binRTs(1, [1/3 2/3], [1 2]); % as there are sometimes to little trials per all conditions, we need to resort to a smaller number. 
 
-% Include the context as such.. although we aren't really using it anymore.
-parameters.conditions{4} = [1 2 3];
-
-for indPP = 1:length(parameters.ppNames)
-    parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,1) == 2, 4) = 3;
-    parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,1) == 1 & parameters.behaviour{indPP}.trialMatrix(:,2) == 70, 4) = 2;
-    parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,1) == 1 & parameters.behaviour{indPP}.trialMatrix(:,2) == 25, 4) = 1;
-end
-
-
-%% %%%%%%%%%%%%%%%%%%%% Pre-set figure parameters    %%%%%%%%%%%%%%%%%%%%%%
-
-parameters.figLayOut.letterSize  = 9;
-parameters.figLayOut.letterType  = 'Arial';
-parameters.figLayOut.lineWidth   = 1.2;
-parameters.figLayOut.lineType    = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-' '-'};
-parameters.figLayOut.legNames{1} = {'Constant', 'Mixed'};
-parameters.figLayOut.legNames{2} = {'Weak', 'Strong'}; % shift as they are 'order' by strength
-parameters.figLayOut.legNames{3} = {'2', '4', '6', '8'};
-parameters.figLayOut.legTitle{1} = 'Context';
-parameters.figLayOut.legTitle{2} = 'Evidence strength';
-parameters.figLayOut.legTitle{3} = 'ITI duration';
-
-parameters.figLayOut.legNames{4}  = {'Weak', 'Strong', 'Mixed'};
-parameters.figLayOut.legTitle{4} = 'Context';
-
-parameters.figLayOut.plotCI      = 0.05; % get shaded area of not.
-parameters.figLayOut.removeInter = 1;
-parameters.figLayOut.saveDim     = [5 11];
-parameters.figLayOut.colours     = ColoursCond12;
-
-% these range are used for the initial plots to explore the full range.
-% We later zoomed in to the new ranges to get a better view. 
-parameters.figLayOut.targetLim   = [-200 0:500:1000];
-parameters.figLayOut.responseLim = [-400 0 200];
-parameters.figLayOut.plotRT      = [];
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% ------------------     Waveform plotting       -------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -323,11 +326,9 @@ parameters.figLayOut.plotRT      = [];
 % other.
 close all
 
-parameters.eeg.baseline  = 0 + [-1 0]*1000/parameters.stim.freqSSVEP;
-parameters.figLayOut.colours = ColoursCond12;
-parameters.figLayOut.legends = {'Weak Context', 'Strong Context', 'Mixed (Weak)', 'Mixed (Strong)'};
+%% --------------------      get CPP        ---------------------------------
+saveCPPhere = fullfile(parameters.figFolder, 'groupAverage\HPF0_CSD1\CPP\');
 
-%% ------------------- get CPP -----------------------------------------
 % define topoplot information
 trangeTopo  =  0 + [-2 -1]*1000/parameters.stim.freqSSVEP; % note if you add a second row, these will be used for FA plots. Only nesc. when you are using target-locked topos
 TargetOrResponse = 2;       % as written 1) target-locked 2) response-locked
@@ -343,14 +344,16 @@ plotThis         = 2;       % 1) individual plots,
                             % 5) get first derivative
 grouping         = 0;       % if you want to include seperated plots for a specific condition (NOTE THIS should be your first in the plotCondition)
 plotCondition    = [1 2];
-%
-% Plot target and response locked CPP (target-locked including all misses)
-% as a function of target context as well as target evidence strength.
-%{
-[~, fig]  = parameters.plotERP(methodUsed, 'CPP',  'A5 A19 A32 A18 A20 A31 A17 A21 A30' , baselineCorrect,...
-   plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope);
-keyboard
 
+cppElec          = 'A5 A19 A32 A18 A20 A31 A17 A21 A30';
+
+% 1)    Plot target and response locked CPP (target-locked including all misses)
+%       as a function of target context as well as target evidence strength. 
+%       (SEE FIGURE TODO)
+[~, fig]  = parameters.plotERP(methodUsed, 'CPP', cppElec, baselineCorrect, ...
+   plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope);
+
+% some small addition to finish the figures for publication
 figure(fig.Handle{1});
 fig.Info{1}(1,2).select()
 legend('off')
@@ -365,21 +368,18 @@ shaded.patch.FaceAlpha    = 0.1;
 fig.Info{1}(1,1).select()
 yticks([0:10:30])
 
-plotSave(gca, 'CPP_Shaded.png', fullfile(parameters.figFolder, 'groupAverage\HPF0_CSD1\CPP\'), parameters.figLayOut.saveDim)
-%}
+plotSave(gca, 'finalFigCPP.png', saveCPPhere, parameters.figLayOut.saveDim)
 
-% plot to compare with the sim. CPP
-%{
-keyboard
 
-saveHere = 'C:\Users\eng\Documents\2. Postdoc_Kelly\Project 5 - Neural correlates of static and dynamic decision-bound adjustments\Project 5.1 - Signatures of bound adjustment\Data\Figures\groupAverage\HPF0_CSD1\CPP\';
-
-parameters.figLayOut.saveDim = [4 6];
+% 2)    Plot to empiral target-locked and response-locked to
+%       compare with the sim. CPP (SEE FIGURES TODO)
+parameters.figLayOut.saveDim     = [4 6];
 parameters.figLayOut.targetLim   = [0 500:500:1000];
-plotThis = 5;
 parameters.figLayOut.plotCI = 0;
 
-[~, fig]  = parameters.plotERP(methodUsed, 'CPP',  'A5 A19 A32 A18 A20 A31 A17 A21 A30' , baselineCorrect,...
+plotThis = 5;       % plot only target-locked
+
+[~, fig]  = parameters.plotERP(methodUsed, 'CPP',  cppElec, baselineCorrect,...
     plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope);
 
 figure(fig.Handle{1})
@@ -387,76 +387,39 @@ ylim([-1 30])
 yticks([0:10:30])
 legend('off')
 ylabel('')
-plotSave(gca, 'CPPModel.png', saveHere, parameters.figLayOut.saveDim);
+plotSave(gca, 'CPPModel.png', saveCPPhere, parameters.figLayOut.saveDim);
 
-% plot to compare with the sim. CPPP
-parameters.figLayOut.targetLim   = [0 500:500:1000];
-plotThis = 5;
-parameters.figLayOut.plotCI = 0;
-
-[~, fig]  = parameters.plotERP(methodUsed, 'CPP',  'A5 A19 A32 A18 A20 A31 A17 A21 A30' , baselineCorrect,...
+% 3)    Plot to first derivative empiral target-locked and 
+%       response-locked to compare with the sim. CPP (SEE FIGURES TODO)
+plotThis = 5; % TODO check for first derivative which numbder
+[~, fig]  = parameters.plotERP(methodUsed, 'CPP',  cppElec, baselineCorrect,...
     plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope);
 
 figure(fig.Handle{1})
 ylim([-0.2 0.3])
 yticks([-0.2:0.2:.2])
 legend('off')
-plotSave(gca, 'derCPPModel.png', saveHere, [parameters.figLayOut.saveDim(1) 6.27]);
+plotSave(gca, 'derCPPModel.png', saveCPPhere, [parameters.figLayOut.saveDim(1) 6.27]);
 
-%}
+% 4)    Plot difference in topoplot to check selectivity of effects.
+%       (SEE FIGURE TODO)
+parameters.plotDifferenceTopo('CPP', cppElec, plotCondition, trangeTopo, TargetOrResponse, AverageOrSlope); % TODO check the slope stuff here
 
-% plot Difference topo plots
-%{
-% parameters.figLayOut.plotCI    = 0.2;
-% parameters.figLayOut.targetLim  = -200:200:1000;
-% parameters.figLayOut.saveDim    = [5 11];
-% parameters.plotDifferenceTopo('CPP', 'A5 A19 A32 A18 A20 A31 A17 A21 A30', [1 2], trangeTopo, TargetOrResponse, AverageOrSlope);
-%}
-
-% get waveform parameters.
-%{
-
-TargetOrResponse = 2;
-trangeTopo(1,:)  = 0 + [-2 -1]*1000/parameters.stim.freqSSVEP;
-trangeTopo(2,:)  = [-250 -1*1000/parameters.stim.freqSSVEP];
+% 5)    Plot staticis of pre-response CPP.
+%       (SEE FIGURE TODO)
+statsRange(1,:)  = trangeTopo;
+statsRange(2,:)  = [-250 -1*1000/parameters.stim.freqSSVEP];
 PeakMeanOrMax    = 1;
-plotCondition    = [1 2];
 negOrPos         = 2;
+RTbins           = [];
 
-parameters.getWaveformParameters(methodUsed, 'CPP', [1/3 2/3], baselineCorrect,...
-    1, plotCondition, grouping, trangeTopo, TargetOrResponse, negOrPos, PeakMeanOrMax);
+tblCPP = parameters.getWaveformParameters(methodUsed, 'CPP', RTbins, baselineCorrect,...
+    1, plotCondition, grouping, statsRange, TargetOrResponse, negOrPos, PeakMeanOrMax);
 
-tblCPP = parameters.getWaveformParameters(methodUsed, 'CPP', [ ], baselineCorrect,...
-    1, plotCondition, grouping, trangeTopo, TargetOrResponse, negOrPos, PeakMeanOrMax);
-
-
+% preform stats.
 lmeCPP = fitglme(tblCPP,  'Peak ~  1 +  Context*Evidencestrength*RT + (1|ppNames)',...
     'FitMethod','Laplace');
 
-parameters.plotDifferenceTopo('CPP', [], [1 2], trangeTopo(1,:), TargetOrResponse, AverageOrSlope, 0, 1, [15:30]);
-
-%}
-
-% ITI duration
-%{
-baselineCorrect = 0;
-parameters.figLayOut.colours = ColoursCond12([1 1 1 1 2 2 2 2 3 3 3 3],:);
-parameters.figLayOut.lineType = {'-', '--', '-.', ':', '-', '--', '-.', ':', '-', '--', '-.', ':'};
-
-% ITI plotting.
-plotCondition = [4 3]; grouping = 4;
-parameters.plotITI(methodUsed, 'CPP',  'A5 A19 A32 A18 A20 A31 A17 A21 A30' , 1,...
-    plotCondition, grouping);
-
-parameters.figLayOut.colours = repmat(ColoursCond12(1:3,:),4,1);
-parameters.figLayOut.lineType = repmat({'-'},12, 1)';
-
-
-% ITI plotting.
-plotCondition = [4]; grouping = 0;
-parameters.plotITI( methodUsed, 'CPP',  'A5 A19 A32 A18 A20 A31 A17 A21 A30' , 1,...
-    plotCondition, grouping);
-%}
 
 
 %% ------------------- get Motor preperation ---------------------------
@@ -1074,63 +1037,4 @@ lme.Fixed  = fitglme(tbl.Fixed ,  'Peak ~  1 + Evidencestrength*RT + (1|ppNames)
 tbl.Mixed = tblN2(double(tblN2.Context) == 2,:);
 lme.Mixed = fitglme(tbl.Mixed,  'Peak ~  1 + Evidencestrength*RT + (1|ppNames)',...
     'FitMethod','Laplace');   
-%}
-
-keyboard
-
-%}
-%% Possible mdeiation methods
-%{
-CPPCovariant = getCovariant(parameters, 2, 'CPP', baselineCorrect, plotThis, plotCondition, TargetOrResponse, tblN2.PeakLatency);
-%}
-%
-tblAll = tbl.BetaBaseline;
-tblAll.Preperation = tbl.BetaBaseline.Peak;
-tblAll.Execution   = tbl.BetaPreresponse.Peak;
-tblAll.N2          = tblN2.Peak;
-tblAll.buildUp     = tblCPP.Peak;
-
-
-close all
-addpath(genpath('C:\Users\eng\Documents\MATLAB\dataAnalysis\Mediation'))
-savePath = fullfile(parameters.figFolder, 'Stats', 'N2-CPP-RT');
-if ~isfolder(savePath), mkdir(savePath); end
-
-
-conditionNames = {'Weak fixed', 'Strong Fixed', 'Weak Mixed', 'Strong Mixed'};
-
-Names = {'N2' 'RT' 'buildUp'};
-RTMediation(parameters, tblAll, 'N2', 'RT', 'buildUp',[], [], 0, Names,...
-    savePath , {'Evidencestrength'}, conditionNames)
-
-
-
-%% ------------------- get CPP anterior ----------------------------------------------
-%{
-    trangeTopo  =  0 + [1 2]*1000/parameters.stim.freqSSVEP;
-    TargetOrResponse = 2;
-    AverageOrSlope   = 1;
-    baselineCorrect  = 1;
-    methodUsed       = 1;
-    plotThis         = 3;
-    grouping         = 0;
-    
-    [Quality, figInfo, panelInfo] = parameters.plotERP(methodUsed, 'CPP_anterior', 'A1 A2 B1 D15 D1 C1', baselineCorrect, plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope);
-    
-    figure(figInfo{1})
-    figInfo{1}(1,2).select()
-    getAxes = gca;
-    shaded = shadedErrorBar(trangeTopo, repmat(nanmean(getAxes.YLim),2,1), repmat(getAxes.YLim(2) - nanmean(getAxes.YLim),2,1));
-    shaded.mainLine.LineStyle = 'none';
-    plotSave(gca, 'CPP_anterior_shaded.png', 'C:\Users\eng\Documents\2. Postdoc_Kelly\Project 5 - Neural correlates of static and dynamic decision-bound adjustments\Project 5.1 - Signatures of bound adjustment\Data\Figures\groupAverage\HPF0_CSD1\', parameters.figLayOut.saveDim)
-
-    parameters.plotDifferenceTopo('CPP_anterior', 'A1 A2 B1 D15 D1 C1', [2 1], trangeTopo, TargetOrResponse, AverageOrSlope); %'A4 A5 A19 A32 A18 A20 A31 A17 A21 A30'
-
-        
-    % get waveform parameters.
-    trangeTopo(1,:) =  0 + [1 2]*1000/parameters.stim.freqSSVEP;
-    trangeTopo(2,:) =  [-300 -1*1000/parameters.stim.freqSSVEP];
-
-    tblCPP = parameters.getWaveformParameters(methodUsed, 'CPP_anterior', 'A1 A2 B1 D15 D1 C1' , baselineCorrect,...
-        plotThis, plotCondition, grouping, trangeTopo);
 %}
