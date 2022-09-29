@@ -349,7 +349,7 @@ cppElec          = 'A5 A19 A32 A18 A20 A31 A17 A21 A30';
 
 % 1)    Plot target and response locked CPP (target-locked including all misses)
 %       as a function of target context as well as target evidence strength. 
-%       (SEE FIGURE TODO)
+%       (SEE FIGURE 2D AND TOPOGRAPHY)
 [~, fig]  = parameters.plotERP(methodUsed, 'CPP', cppElec, baselineCorrect, ...
    plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope);
 
@@ -372,12 +372,12 @@ plotSave(gca, 'finalFigCPP.png', saveCPPhere, parameters.figLayOut.saveDim)
 
 
 % 2)    Plot to empiral target-locked and response-locked to
-%       compare with the sim. CPP (SEE FIGURES TODO)
+%       compare with the sim. CPP (SEE FIGURE 3D and FIGURE 3 suppl. 1A )
 parameters.figLayOut.saveDim     = [4 6];
 parameters.figLayOut.targetLim   = [0 500:500:1000];
-parameters.figLayOut.plotCI = 0;
+parameters.figLayOut.plotCI      = 0;
 
-plotThis = 5;       % plot only target-locked
+plotThis = 5; % CHECK TODO plot only target-locked
 
 [~, fig]  = parameters.plotERP(methodUsed, 'CPP',  cppElec, baselineCorrect,...
     plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope);
@@ -387,10 +387,10 @@ ylim([-1 30])
 yticks([0:10:30])
 legend('off')
 ylabel('')
-plotSave(gca, 'CPPModel.png', saveCPPhere, parameters.figLayOut.saveDim);
+plotSave(gca, 'finalFigCPPModel.png', saveCPPhere, parameters.figLayOut.saveDim);
 
 % 3)    Plot to first derivative empiral target-locked and 
-%       response-locked to compare with the sim. CPP (SEE FIGURES TODO)
+%       response-locked to compare with the sim. CPP (SEE FIGURE 3D and FIGURE 3 suppl. 1A )
 plotThis = 5; % TODO check for first derivative which numbder
 [~, fig]  = parameters.plotERP(methodUsed, 'CPP',  cppElec, baselineCorrect,...
     plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope);
@@ -399,14 +399,16 @@ figure(fig.Handle{1})
 ylim([-0.2 0.3])
 yticks([-0.2:0.2:.2])
 legend('off')
-plotSave(gca, 'derCPPModel.png', saveCPPhere, [parameters.figLayOut.saveDim(1) 6.27]);
+plotSave(gca, 'finalFigderCPPModel.png', saveCPPhere, [parameters.figLayOut.saveDim(1) 6.27]);
 
 % 4)    Plot difference in topoplot to check selectivity of effects.
-%       (SEE FIGURE TODO)
+%       (NOT IN PAPER)
+%{
 parameters.plotDifferenceTopo('CPP', cppElec, plotCondition, trangeTopo, TargetOrResponse, AverageOrSlope); % TODO check the slope stuff here
+%}
 
 % 5)    Plot staticis of pre-response CPP.
-%       (SEE FIGURE TODO)
+%       (SEE FIGURE 2E)
 statsRange(1,:)  = trangeTopo;
 statsRange(2,:)  = [-250 -1*1000/parameters.stim.freqSSVEP];
 PeakMeanOrMax    = 1;
@@ -416,53 +418,53 @@ RTbins           = [];
 tblCPP = parameters.getWaveformParameters(methodUsed, 'CPP', RTbins, baselineCorrect,...
     1, plotCondition, grouping, statsRange, TargetOrResponse, negOrPos, PeakMeanOrMax);
 
-% preform stats.
+% preform linear mixed model on the pre-response CPP amplitude.
 lmeCPP = fitglme(tblCPP,  'Peak ~  1 +  Context*Evidencestrength*RT + (1|ppNames)',...
     'FitMethod','Laplace');
 
-
-
 %% ------------------- get Motor preperation ---------------------------
-%
+saveBetahere = fullfile(parameters.figFolder, 'groupAverage\HPF0_CSD1\Beta ERD\');
+
 trangeTopo  = 0 + [-2 -1]*1000/parameters.stim.freqSSVEP;
 AverageOrSlope   = 1;
 TargetOrResponse = 2;
 
-baselineCorrect  = 2;
-parameters.eeg.baseline =  0 + [-2 0]*1000/parameters.stim.freqSSVEP; % Motor Execution threshold
+baselineCorrect  = 2;    % baseline-correct towards response period!
+parameters.eeg.baseline          =  0 + [-2 0]*1000/parameters.stim.freqSSVEP; % Motor Execution threshold
+
 parameters.figLayOut.targetLim   = [-200 500:500:1000];
-parameters.figLayOut.plotCI = 0.05;
+parameters.figLayOut.plotCI      = 0.05;
 parameters.figLayOut.saveDim     = [5 11];
 
 methodUsed       = 1;
-grouping         = 0;
-plotCondition    = [1 2];
-plotThis         = 2; % 1) plot individual, 2) plot only averages.
+plotThis         = 2; % 2) average Hits and seperated average Misses and FA
 
 % use specific code as the people werent instructed to use the right hand. 
 % handmess(parameters, 'Beta ERD', [], trangeTopo, TargetOrResponse, AverageOrSlope, 1, [13:30]);
 possElec{1} = 'D20 D19 D18 D27 D28 D17'; % right handed response
 possElec{2} = 'B21 B22 B23 B19 B18 B17'; % left handed response
-Elec{1} = possElec{1};
-Elec{2} = possElec{1};
-Elec{3} = possElec{1};
-Elec{4} = possElec{1};
-Elec{5} = possElec{2};
-Elec{6} = possElec{1};
-Elec{7} = possElec{1};
-Elec{8} = possElec{1};
-Elec{9} = possElec{1};
-Elec{10} = possElec{1};
-Elec{11} = possElec{1};
-Elec{12} = possElec{2};
-Elec{13} = possElec{1};
-Elec{14} = possElec{1};
 
-%{
-keyboard
-%{
-[Quality, fig] = parameters.plotERP(methodUsed, 'Beta ERD', Elec,...
-    baselineCorrect, plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope, 2, 15:30);
+betaElec{1} = possElec{1};
+betaElec{2} = possElec{1};
+betaElec{3} = possElec{1};
+betaElec{4} = possElec{1};
+betaElec{5} = possElec{2};
+betaElec{6} = possElec{1};
+betaElec{7} = possElec{1};
+betaElec{8} = possElec{1};
+betaElec{9} = possElec{1};
+betaElec{10} = possElec{1};
+betaElec{11} = possElec{1};
+betaElec{12} = possElec{2};
+betaElec{13} = possElec{1};
+betaElec{14} = possElec{1};
+
+% 1)    Plot target and response locked Beta (target-locked including all misses)
+%       as a function of target context as well as target evidence strength. 
+%       First, baseline-correct to pre-response Beta threshold (SEE FIGURE 2A).
+[Quality, fig] = parameters.plotERP(methodUsed, 'Beta ERD', betaElec,...
+    baselineCorrect, plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse,...
+    AverageOrSlope, 2, 15:30); % NOTE, 15 hz is excluded for the SSVEP
 
 figure(fig.Handle{1});
 fig.Info{1}(1,2).select()
@@ -481,22 +483,22 @@ shaded = shadedErrorBar(trangeTopo, repmat(nanmean(getAxes.YLim),2,1), repmat(ge
 shaded.mainLine.LineStyle = 'none';
 shaded.edge(1).LineStyle  = 'none'; shaded.edge(2).LineStyle  = 'none';
 shaded.patch.FaceAlpha    = 0.1;
-% set(gca, 'YDir','reverse')
 
-plotSave(gca, 'Beta ERD.png', fullfile(parameters.figFolder, 'groupAverage\HPF0_CSD1\Beta ERD\'), parameters.figLayOut.saveDim)
-%}
+plotSave(gca, 'finalFigBeta.png', saveBetahere, parameters.figLayOut.saveDim)
 
-% First plot Beta without baseline correction
-%
-[Quality, fig] = parameters.plotERP(methodUsed, 'Beta ERD', Elec,...
-    0, plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope, 2, 15:30);
-
-parameters.figLayOut.colours = [ColoursCond12([1 1 1 2 2 2],:); ColoursCond12([3  3 3  4 4 4],:)];
-parameters.figLayOut.lineType = {'-' '-.' ':' '-' '-.' ':' '-' '-.'  ':' '-' '-.' ':'}
+% 2)    Plot difference, showing specificity of context effects 
+%       (SEE topographic plots in FIGURE 2A).
+parameters.plotDifferenceTopo('Beta ERD', [], [1 2], trangeTopo, TargetOrResponse, AverageOrSlope,1, [15:30]);
 
 
-[Quality, fig] = parameters.plotERP(methodUsed, 'Beta ERD', Elec,...
-    0, 3, [1 2 0], 1, trangeTopo, TargetOrResponse, AverageOrSlope, 2, 15:30);
+% 3)    Plot target and response locked Beta (target-locked including all misses)
+%       as a function of target context as well as target evidence strength. 
+%       No baseline-correction (SEE FIGURE 4A).
+baselineCorrect = 0;
+
+[Quality, fig] = parameters.plotERP(methodUsed, 'Beta ERD', betaElec,...
+    baselineCorrect, plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope,...
+    2, 15:30);
 
 figure(fig.Handle{1});
 fig.Info{1}(1,2).select()
@@ -506,7 +508,6 @@ ylim([3.5 5])
 yticks([3.5:0.5:5])
 line([0 0], [3.5 5], 'Color', 'k', 'LineWidth', 2)
 
-
 figure(fig.Handle{2});
 fig.Info{2}(1,2).select()
 
@@ -515,7 +516,7 @@ ylim([3.5 5])
 yticks([3.5:0.5:5])
 line([0 0], [3.5 5], 'Color', 'k', 'LineWidth', 2)
 
-% set(gca, 'YDir','reverse')
+% add stats time area
 getAxes = gca;
 shaded = shadedErrorBar(0 + [-2 -1]*1000/parameters.stim.freqSSVEP, repmat(nanmean(getAxes.YLim),2,1), repmat(getAxes.YLim(2) - nanmean(getAxes.YLim),2,1));
 shaded.mainLine.LineStyle = 'none';
@@ -530,12 +531,10 @@ shaded = shadedErrorBar( 0 + [-2 0]*1000/parameters.stim.freqSSVEP, repmat(nanme
 shaded.mainLine.LineStyle = 'none';
 shaded.edge(1).LineStyle  = 'none'; shaded.edge(2).LineStyle  = 'none';
 shaded.patch.FaceAlpha    = 0.1;
-% set(gca, 'YDir','reverse')
 
-plotSave(gca, 'Beta ERD_noBaseline.png', fullfile(parameters.figFolder, 'groupAverage\HPF0_CSD1\Beta ERD\'), parameters.figLayOut.saveDim)
-%}
+plotSave(gca, 'finalFigBeta_noBaseline.png', saveBetahere, parameters.figLayOut.saveDim)
 
-% parameters.plotDifferenceTopo('Beta ERD', [], [1 2], trangeTopo, TargetOrResponse, AverageOrSlope,1, [15:30]);
+
 
 % ITI period
 %{
@@ -881,98 +880,38 @@ fprintf('-----------------------------------------------------------------------
 diary off
 %}
 
-
-% 
-% 
-% 
-% tbl.Strong = tblAll(double(tblAll.Evidencestrength) == 2 & double(tblAll.Context) == 1,:);
-% lme.Strong1 = fitglme(tbl.Strong,  'RT ~  1 + Preperation + (1|ppNames)',...
-%     'FitMethod','Laplace');
-% tbl.Strong = tblAll(double(tblAll.Evidencestrength) == 2 & double(tblAll.Context) == 2,:);
-% lme.Strong2 = fitglme(tbl.Strong,  'RT ~  1 + Preperation + (1|ppNames)',...
-%     'FitMethod','Laplace');
-
-
-
-%tblN2.Excursion = tbl.Excursion.Peak;
-
-%% ------------------- get SSVEP -----------------------------------------
-% just to check for bleading and ensure that the baseline difference is not
-% a effect of SSVEP.
-%{
-keyboard
-trangeTopo  = 0 + [-2 -1]*1000/parameters.stim.freqSSVEP;
-AverageOrSlope   = 1;
-TargetOrResponse = 1;
-baselineCorrect  = 0;
-
-parameters.eeg.baseline =  0 + [-2 0]*1000/parameters.stim.freqSSVEP; % Motor Execution threshold
-parameters.figLayOut.targetLim   = [-200 0:500:1000];
-parameters.figLayOut.plotCI = 0.05;
-parameters.figLayOut.saveDim     = [5 11];
-
-methodUsed       = 1;
-grouping         = 0;
-plotCondition    = [1 2];
-plotThis         = 3; % 1) plot individual, 2) plot only averages.
-
-
-[Quality, fig] = parameters.plotERP(methodUsed, 'SSVEP', [],...
-    baselineCorrect, plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope, 1, 15);
-fig.Info{1}(1,2).select()
-legend('off')
-fig.Info{1}(1,1).select()
-getAxes = gca;
-shaded = shadedErrorBar( 0 + [-2 0]*1000/parameters.stim.freqSSVEP, repmat(nanmean(getAxes.YLim),2,1), repmat(getAxes.YLim(2) - nanmean(getAxes.YLim),2,1));
-shaded.mainLine.LineStyle = 'none';
-shaded.edge(1).LineStyle  = 'none'; shaded.edge(2).LineStyle  = 'none';
-shaded.patch.FaceAlpha    = 0.1;
-plotSave(gca, 'SSVEP.png', fullfile(parameters.figFolder, 'groupAverage\HPF0_CSD1\SSVEP\'), parameters.figLayOut.saveDim)
-
-
-parameters.plotDifferenceTopo('SSVEP', [], [2 1], trangeTopo, TargetOrResponse, AverageOrSlope,1, [15:30]);
-%}
-
 %% ------------------- get N2 -----------------------------------------
-% define topoplot information
-keyboard
-trangeTopo  = [240 340] ;% 250 + [-2 -1]*1000/parameters.stim.freqSSVEP; % note if you add a second row, these will be used for FA plots. Only nesc. when you are using target-locked topos
-TargetOrResponse = 1;       % as written 1) target-locked 2) response-locked
+saveN2here = fullfile(parameters.figFolder, 'groupAverage\HPF0_CSD1\N2\');
 
-% define rest
+trangeTopo       = [240 340];   % target-locked now
+TargetOrResponse = 1;           % as written 1) target-locked 2) response-locked
+
 baselineCorrect  = 1;
-methodUsed       = 1;       % Method used can be 1) choose spec. electrodes, 2) choose cluster of electrodes and get the 3 best based on SNR, 3) apply lucalize
-plotThis         = 6;      % 1) individual plots, 
-                            % 2) average Hits and seperated average Misses and FA
-                            % 3) include all average target-locked Misses
-                            % 4) plot target and response seperately.
-                            % 5) get first derivative
-grouping         = 0;       % if you want to include seperated plots for a specific condition (NOTE THIS should be your first in the plotCondition)
-plotCondition    = [1 2];
-% Plot target and response locked N2 (target-locked including all misses)
-% as a function of target context as well as target evidence strength.
-%
-[~, fig]  = parameters.plotERP(methodUsed, 'N2',  ['D30 D31 B12 B11'], baselineCorrect,...
-   plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope);
+methodUsed       = 1;   % Method used can be 1) choose spec. electrodes, 2) choose cluster of electrodes and get the 3 best based on SNR, 3) apply lucalize
+plotThis         = 6;   % TODO check
+N2Elec           = 'D30 D31 B12 B11';
 
-plotThis         = 2;
-[~, fig]  = parameters.plotERP(methodUsed, 'N2',  ['D30 D31 B12 B11'], baselineCorrect,...
+% 1)    Plot target and response locked N2 (target-locked including all misses)
+%       as a function of target context as well as target evidence strength.
+%       (SEE FIGURE 2 - supplement 1A and topography);
+plotThis        = 2;
+[~, fig]  = parameters.plotERP(methodUsed, 'N2', N2Elec, baselineCorrect,...
    plotThis, plotCondition, grouping, trangeTopo, TargetOrResponse, AverageOrSlope);
-
 
 figure(fig.Handle{1});
 legend('off')
 ylim([-26 5])
 getAxes = gca;
 ylabel('')
-%}
-%{
-[hypo, timeSeries] = compareEffects_context(parameters, methodUsed, 'N2', baselineCorrect, plotCondition, TargetOrResponse, 50, 10, 0.001, 0);
+
+% check for effects of context and motion coherence
+[hypo, timeSeries] = compareEffects_context(parameters, methodUsed, 'N2', baselineCorrect,...
+        plotCondition, TargetOrResponse, 50, 10, 0.001, 0);
 
 context = hypo(5,:);
 context(:, hypo(end,:) ~= 0) = 0;
 context = find(context ~= 0);
-%
+
 shaded = shadedErrorBar(parameters.eeg.targetEpoch([ timeSeries(context(1)) - 50/2 timeSeries(context(end))+ 50/2]),...
     repmat(nanmean(getAxes.YLim),2,1), repmat(getAxes.YLim(2) - nanmean(getAxes.YLim),2,1));
 shaded.mainLine.LineStyle = 'none';
@@ -980,47 +919,39 @@ shaded.edge(1).LineStyle = 'none'; shaded.edge(2).LineStyle = 'none';
 shaded.patch.FaceAlpha = 0.05;
 legend('off')
       
-% 
-plotSave(gca, 'N2_shaded.png', fullfile(parameters.figFolder, 'groupAverage\HPF0_CSD1\N2\'), [4.1 6.1])
-%}
-% parameters.plotDifferenceTopo('N2',  ['D30 D31 B12 B11'], [2 1], trangeTopo, TargetOrResponse, AverageOrSlope);
-%%
-hereFigFolder = fullfile(parameters.figFolder,  'groupAverage',...
-    ['HPF' num2str(parameters.eeg.HPFcutoff) '_CSD' num2str(parameters.eeg.applyCSD)],...
-    'N2', 'RTBINS2/');
+plotSave(gca, 'N2_shaded.png', saveN2here, [4.1 6.1])
 
+% 2)    Plot target and response locked N2 (target-locked including all misses)
+%       as a function of target context as well as target evidence strength.
+%       (SEE FIGURE 2 - supplement 1C);
+parameters.plotDifferenceTopo('N2',  N2Elec, [2 1], trangeTopo, TargetOrResponse, AverageOrSlope);
+
+% 3)    Plot target and response locked N2 (target-locked including all misses)
+%       as a function of target context as well as target evidence strength.
+%       (SEE FIGURE 2 - supplement 1B);
 TargetOrResponse = 1;
 trangeTopo(1,:)  = parameters.eeg.targetEpoch(timeSeries(context)) + [-1 1]*1000/parameters.stim.freqSSVEP;
 trangeTopo(2,:)  = [0 300];
 PeakMeanOrMax    = 2;
-plotCondition    = [1 2];
 negOrPos         = 1;
 
-parameters.getWaveformParameters(methodUsed, 'N2', [1/3 2/3], 1,...
+tblN2 = parameters.getWaveformParameters(methodUsed, 'N2', [1/3 2/3], baselineCorrect,...
     1, plotCondition, grouping, trangeTopo, TargetOrResponse, negOrPos, PeakMeanOrMax);
 
-set(gca,'FontSize', parameters.figLayOut.letterSize);
-set(gca,'FontName', parameters.figLayOut.letterType);
 yticks([-20:10:0])
 xlim([300 1050])
 xticks(400:200:1100);
 xticklabels((400:200:1100)./1000)
 xlabel(' ')
-set(gca,'FontSize', parameters.figLayOut.letterSize);
-set(gca,'FontName', parameters.figLayOut.letterType);
-% set(gca, 'YDir','reverse')
-plotSave(gca, ['peak.png'], hereFigFolder, [4.1 3.8]);
 
-tblN2 = parameters.getWaveformParameters(methodUsed, 'N2', [], baselineCorrect,...
-    0, plotCondition, grouping, trangeTopo, TargetOrResponse, negOrPos, PeakMeanOrMax);
+plotSave(gca, 'finalN2peak.png', saveN2here, [4.1 3.8]);
 
-
+% get stats
 lme.N2 = fitglme(tblN2,  'Peak ~  1 + Context*Evidencestrength*RT + (1|ppNames)',...
     'FitMethod','Laplace');
-
-
-%{
-% check context
+    
+% Find interaction effect, so post-hoc testing to further check
+% the effects.
 tbl.Weak = tblN2(double(tblN2.Evidencestrength) == 1,:);
 lme.Weak = fitglme(tbl.Weak,  'Peak ~  1 + Context*RT + (1|ppNames)',...
     'FitMethod','Laplace');
@@ -1037,4 +968,4 @@ lme.Fixed  = fitglme(tbl.Fixed ,  'Peak ~  1 + Evidencestrength*RT + (1|ppNames)
 tbl.Mixed = tblN2(double(tblN2.Context) == 2,:);
 lme.Mixed = fitglme(tbl.Mixed,  'Peak ~  1 + Evidencestrength*RT + (1|ppNames)',...
     'FitMethod','Laplace');   
-%}
+
