@@ -105,13 +105,12 @@ clear cond* *Folder block*
 parameters.conditions{3}   = [2 4 6 8];
 parameters.condNames{3}    = 'ITI';
 
-
-
 % NOTE below was needed to created the right trialMatrix construction, usually,
 % this can be done simply in epoching through setting the right condNames before
 % calling parameters.getInformation. If designing or writing your own presenation
 % code this can be easily prevented by having a save parameters refering to the 
 % conditions structure. 
+%{
 for indPP = 1:length(parameters.ppNames)
     for indBlock = 1:parameters.numBlocks(indPP)
         
@@ -140,7 +139,7 @@ for indPP = 1:length(parameters.ppNames)
         parameters.experiment{indPP}{indBlock}.ITI = tmpITI;
     end
 end
-
+%}
 
 % Set everything for the stimulus presentation. 
 % Assuming that parameters are the same for all participants and 
@@ -194,8 +193,6 @@ parameters.figLayOut.targetLim   = [-200 0:500:1000];
 parameters.figLayOut.responseLim = [-400 0 200];
 parameters.figLayOut.plotRT      = [];
 
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% --------------    EEG PROCESSING PARAMETERS    -------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -209,6 +206,8 @@ parameters.figLayOut.plotRT      = [];
 
 %---------------     set pre-processing parameters   ----------------------
 parameters.eeg.NumberOfChannels = 128;
+parameters.eeg.SampleRate   	= 512;	% EEG sample rate
+
 % load in a structure 'chanlocs' containing the x,y,z locations of each of the 128 scalp channels in the cap.
 load chanlocsBioSemi128;
 elab = strings(parameters.eeg.NumberOfChannels,1);
@@ -218,12 +217,9 @@ end
 elab(end+1)='FCz'; clear ind*
 
 parameters.eeg.ChannelsName   	= elab; 
-parameters.eeg.SampleRate   	= 512;	% EEG sample rate
-
 parameters.eeg.chanlocs         = chanlocs;	% electrode locations
 parameters.eeg.transChanlocs	= load('CSD_coords.mat');	% electrode locations
 clear elab chanlocs
-
 
 parameters.eeg.ampSaturation	= 3276;	% What's the maximum limiting amplitude of the amplifiers, to detect saturation?
 
@@ -238,7 +234,7 @@ parameters.eeg.cuttoffLPF	= 38;	% 38 cut-off threshold for low-pass filter
                                     % low-pass filter will be different as NY has 60 hz electricity rate.
 parameters.eeg.LHamming     = 77;   % 77
 parameters.eeg.applyHPF     = 0;    % look at raw data if is nescessary.
-parameters.eeg.simonHPF     = 0;
+parameters.eeg.simonHPF     = 0;    % RODO CHECK THIS OUT??
 parameters.eeg.HPFcutoff    = 0;
 parameters.eeg.applyDetrend	= 1;    % option 1(all)/ 2(only that will benefit from it)
 
@@ -342,8 +338,9 @@ plotThis         = 2;       % 1) individual plots,
                             % 3) include all average target-locked Misses
                             % 4) plot target and response seperately.
                             % 5) get first derivative
+                            
 grouping         = 0;       % if you want to include seperated plots for a specific condition (NOTE THIS should be your first in the plotCondition)
-plotCondition    = [1 2];
+plotCondition    = [1 2];   % order in which it is plotted, look through trialmatrix and getConditions to better understand everything. 
 
 cppElec          = 'A5 A19 A32 A18 A20 A31 A17 A21 A30';
 
@@ -369,7 +366,6 @@ fig.Info{1}(1,1).select()
 yticks([0:10:30])
 
 plotSave(gca, 'finalFigCPP.png', saveCPPhere, parameters.figLayOut.saveDim)
-
 
 % 2)    Plot to empiral target-locked and response-locked to
 %       compare with the sim. CPP (SEE FIGURE 3D and FIGURE 3 suppl. 1A )
@@ -430,7 +426,7 @@ AverageOrSlope   = 1;
 TargetOrResponse = 2;
 
 baselineCorrect  = 2;    % baseline-correct towards response period!
-parameters.eeg.baseline          =  0 + [-2 0]*1000/parameters.stim.freqSSVEP; % Motor Execution threshold
+parameters.eeg.baselinem =  0 + [-2 0]*1000/parameters.stim.freqSSVEP; % Motor Execution threshold
 
 parameters.figLayOut.targetLim   = [-200 500:500:1000];
 parameters.figLayOut.plotCI      = 0.05;
@@ -488,8 +484,65 @@ plotSave(gca, 'finalFigBeta.png', saveBetahere, parameters.figLayOut.saveDim)
 
 % 2)    Plot difference, showing specificity of context effects 
 %       (SEE topographic plots in FIGURE 2A).
-parameters.plotDifferenceTopo('Beta ERD', [], [1 2], trangeTopo, TargetOrResponse, AverageOrSlope,1, [15:30]);
+parameters.plotDifferenceTopo('Beta ERD', [], plotCondition, trangeTopo, TargetOrResponse, AverageOrSlope,...
+    1, [15:30], 0, 1);
 
+% 3)    Get all stats of excursion
+%       (SEE FIG 2B and FIG 2A topography)
+baselineCorrect  = 0;
+TargetOrResponse = 1;
+negOrPos         = 1;
+PeakMeanOrMax    = 1;
+trangeTopo(2,:)  =  [-500 0]; 
+tbl.Excursion =  parameters.getWaveformParameters(methodUsed, 'Beta ERD', [], baselineCorrect,...
+    1, plotCondition, grouping, trangeTopo, TargetOrResponse, negOrPos,PeakMeanOrMax);
+
+% check for RT interaction effects:
+lme.RTinteraction = fitglme(tbl.Excursion,  'Peak ~  1 + Context*Evidencestrength*RT + (1|ppNames)',...
+    'FitMethod','Laplace');
+
+lme.Excursion = fitglme(tbl.Excursion,  'Peak ~  1 + Context*Evidencestrength + (1|ppNames)',...
+    'FitMethod','Laplace');
+
+tbl.FixedExcursion = tbl.Excursion(double(tbl.Excursion.Context) == 1,:);
+lme.FixedExcursion  = fitglme(tbl.FixedExcursion ,  'Peak ~  1 + Evidencestrength + (1|ppNames)',...
+    'FitMethod','Laplace');
+
+tbl.MixedExcursion = tbl.Excursion(double(tbl.Excursion.Context) == 2,:);
+lme.MixedExcursion = fitglme(tbl.MixedExcursion,  'Peak ~  1 + Evidencestrength + (1|ppNames)',...
+    'FitMethod','Laplace');   
+
+tbl.WeakExcursion = tbl.Excursion(double(tbl.Excursion.Evidencestrength) == 1,:);
+lme.WeakExcursion  = fitglme(tbl.WeakExcursion ,  'Peak ~  1 + Context + (1|ppNames)',...
+    'FitMethod','Laplace');
+
+tbl.StrongExcursion = tbl.Excursion(double(tbl.Excursion.Evidencestrength) == 2,:);
+lme.StrongExcursion = fitglme(tbl.StrongExcursion,  'Peak ~  1 + Context + (1|ppNames)',...
+    'FitMethod','Laplace'); 
+
+diary(fullfile(parameters.logFolder, 'WaveformsStats', 'lmeERD.txt'))
+clc
+fprintf('Waveform stats checking for excursion effects.\nInitial assumption that they are context and RT-invariant by baseline correction to motor execution threshold.\n');
+fprintf('--------------------------------------------------------------------------------------------------------------\n');
+lme.RTinteraction
+fprintf('While there is an interaction effect (e.g. smaller excursion relates to faster RTs,\nthere are no interaction effects\n');
+fprintf('Remove RT effects\n');
+fprintf('--------------------------------------------------------------------------------------------------------------\n');
+lme.Excursion
+fprintf('Interaction effect of Context and Motion Coherence\n');
+fprintf('--------------------------------------------------------------------------------------------------------------\n');
+fprintf('Posthocs of Context effects show that there only is a difference between Weak and Strong in fixed condition=\n');
+Fixed = lme.FixedExcursion
+fprintf('And not in the mixed condition\n');
+Mixed = lme.MixedExcursion
+fprintf('--------------------------------------------------------------------------------------------------------------\n');
+fprintf('--------------------------------------------------------------------------------------------------------------\n');
+fprintf('Posthocs of Motion Coherence effects show that there only is a difference between Strong in fixed and mixed condition=\n');
+Fixed = lme.StrongExcursion
+fprintf('but not for Weak\n');
+Mixed = lme.WeakExcursion
+fprintf('--------------------------------------------------------------------------------------------------------------\n');
+diary off
 
 % 3)    Plot target and response locked Beta (target-locked including all misses)
 %       as a function of target context as well as target evidence strength. 
@@ -592,103 +645,6 @@ keyboard
 %}
 
 
-%% Plot BETA as marker of motor preperation
-%
-keyboard
-hereFigFolder = fullfile(parameters.figFolder,  'groupAverage',...
-    ['HPF' num2str(parameters.eeg.HPFcutoff) '_CSD' num2str(parameters.eeg.applyCSD)],...
-    'Beta ERD', 'RTBINS2/');
-
-baselineCorrect  = 2;
-TargetOrResponse = 1;
-negOrPos = 1;
-PeakMeanOrMax = 1;
-trangeTopo(2,:)  =  [-500 0]; 
-
-% 1) excursion
-%
-trangeTopo(1,:)  =  0 + [-2 -1]*1000/parameters.stim.freqSSVEP; %
-
-parameters.getWaveformParameters(methodUsed, 'Beta ERD', [1/3 2/3], baselineCorrect,...
-    1, plotCondition, grouping, trangeTopo, TargetOrResponse, negOrPos,PeakMeanOrMax);
-
-xlim([300 1050])
-set(gca,'FontSize', parameters.figLayOut.letterSize);
-set(gca,'FontName', parameters.figLayOut.letterType);
-plotSave(gca, 'amplitudeExcursion.png', hereFigFolder, [4.6 6.4]);
-
-tbl.Excursion = parameters.getWaveformParameters(methodUsed, 'Beta ERD', [], baselineCorrect,...
-   1, [plotCondition], grouping, trangeTopo, TargetOrResponse, negOrPos,PeakMeanOrMax);
-
-parameters.plotDifferenceTopo('Beta ERD', [], [1 2], trangeTopo(1,:), TargetOrResponse,...
-    AverageOrSlope, 0, 1, [15:30], 0, 1);
-
-
-% plot for ITI effects
-%{
-tbl.Excursion = parameters.getWaveformParameters(methodUsed, 'Beta ERD', [1/3 2/3], baselineCorrect,...
-  1, [4 3], grouping, trangeTopo, TargetOrResponse, negOrPos,PeakMeanOrMax);
-
-tbl.Excursion.Context = reordercats(tbl.Excursion.Context, [2 1 3]);
-
-lme.ITI = fitglme(tbl.Excursion,  'Peak ~  1 + ITIduration*Context*RT + (1|ppNames)',...
-    'FitMethod','Laplace');
-%}
-
-ylim([0 0.8])
-yticks(0:0.2:1)
-set(gca,'FontSize', parameters.figLayOut.letterSize);
-set(gca,'FontName', parameters.figLayOut.letterType);
-plotSave(gca, 'BetaERD_exursion.png', hereFigFolder, [4.17 2.7]);
-
-% check for RT interaction effects:
-lme.RTinteraction = fitglme(tbl.Excursion,  'Peak ~  1 + Context*Evidencestrength*RT + (1|ppNames)',...
-    'FitMethod','Laplace');
-
-lme.Excursion = fitglme(tbl.Excursion,  'Peak ~  1 + Context*Evidencestrength + (1|ppNames)',...
-    'FitMethod','Laplace');
-
-tbl.FixedExcursion = tbl.Excursion(double(tbl.Excursion.Context) == 1,:);
-lme.FixedExcursion  = fitglme(tbl.FixedExcursion ,  'Peak ~  1 + Evidencestrength + (1|ppNames)',...
-    'FitMethod','Laplace');
-
-tbl.MixedExcursion = tbl.Excursion(double(tbl.Excursion.Context) == 2,:);
-lme.MixedExcursion = fitglme(tbl.MixedExcursion,  'Peak ~  1 + Evidencestrength + (1|ppNames)',...
-    'FitMethod','Laplace');   
-
-tbl.WeakExcursion = tbl.Excursion(double(tbl.Excursion.Evidencestrength) == 1,:);
-lme.WeakExcursion  = fitglme(tbl.WeakExcursion ,  'Peak ~  1 + Context + (1|ppNames)',...
-    'FitMethod','Laplace');
-
-tbl.StrongExcursion = tbl.Excursion(double(tbl.Excursion.Evidencestrength) == 2,:);
-lme.StrongExcursion = fitglme(tbl.StrongExcursion,  'Peak ~  1 + Context + (1|ppNames)',...
-    'FitMethod','Laplace'); 
-
-diary(fullfile(parameters.logFolder, 'WaveformsStats', 'lmeERD.txt'))
-clc
-fprintf('Waveform stats checking for excursion effects.\nInitial assumption that they are context and RT-invariant by baseline correction to motor execution threshold.\n');
-fprintf('--------------------------------------------------------------------------------------------------------------\n');
-lme.RTinteraction
-fprintf('While there is an interaction effect (e.g. smaller excursion relates to faster RTs,\nthere are no interaction effects\n');
-fprintf('Remove RT effects\n');
-fprintf('--------------------------------------------------------------------------------------------------------------\n');
-lme.Excursion
-fprintf('Interaction effect of Context and Motion Coherence\n');
-fprintf('--------------------------------------------------------------------------------------------------------------\n');
-fprintf('Posthocs of Context effects show that there only is a difference between Weak and Strong in fixed condition=\n');
-Fixed = lme.FixedExcursion
-fprintf('And not in the mixed condition\n');
-Mixed = lme.MixedExcursion
-fprintf('--------------------------------------------------------------------------------------------------------------\n');
-fprintf('--------------------------------------------------------------------------------------------------------------\n');
-fprintf('Posthocs of Motion Coherence effects show that there only is a difference between Strong in fixed and mixed condition=\n');
-Fixed = lme.StrongExcursion
-fprintf('but not for Weak\n');
-Mixed = lme.WeakExcursion
-fprintf('--------------------------------------------------------------------------------------------------------------\n');
-diary off
-%}
-%
 keyboard
 % 2) baseline effects
 %
@@ -712,17 +668,6 @@ trangeTopo(1,:)  =  0 + [-4 -1]*1000/parameters.stim.freqSSVEP; %
 % % set(gca, 'YDir','reverse')
 % 
 % plotSave(gca, ['amplitudeBaseline.png'], hereFigFolder, [3.7 4.5]);%[4.3 obj.figLayOut.saveDim(2)/3]);
-
-for indPP = 1:length(parameters.ppNames)  
-    parameters.behaviour{indPP}.trialMatrix(:,5) = parameters.behaviour{indPP}.binRT;
-    parameters.behaviour{indPP}.trialMatrix((parameters.behaviour{indPP}.trialMatrix(:,5) == 3),5) = nan;
-    parameters.behaviour{indPP}.trialMatrix(:,6) = NaN;
-    parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,2) == 70,6) = ...
-      parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,2) == 70,1);
-end
-
-parameters.conditions{5} = 'speed'; parameters.figLayOut.legTitle(5) = {'RTspeed'}; parameters.figLayOut.legNames{5} = {'fast', 'slow'};
-parameters.conditions{6} = 'strong'; parameters.figLayOut.legTitle(6) = {'Strong'}; parameters.figLayOut.legNames{6} = {'fixed', 'mixed'};
 
 parameters.plotDifferenceTopo('Beta ERD_baseline', [], [2 1], trangeTopo(1,:),...
     TargetOrResponse, AverageOrSlope, 0, 1, [15:30], 0, 0);
