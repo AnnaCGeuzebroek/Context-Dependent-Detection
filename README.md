@@ -3,7 +3,7 @@
 
 Code as described in Geuzebroek et al. (2022), allowing the extraction of behavioural and electrophysiological data (contextAnalysis) as well as behavioural and neurally-informed modelling of the data (contextModelling). All preprocessed data is available at DOI:[/10.17605/OSF.IO/YJVKU](https://osf.io/yjvku/?view_only=7ed5aee5d09a4d5ca13de1ba169b0588), but raw data will be made available at request. 
 
-**Before going through this code download *dataAnalysis.m*, *dataModelling.m* and the Dependables [here](https://github.com/AnnaCGeuzebroek/Neurally-Informed-Modelling)**
+**Before going through this code download *dataAnalysis.m*, *dataModelling.m* and the dependencies [here](https://github.com/AnnaCGeuzebroek/Neurally-Informed-Modelling)**
 
 For an excellent review on neurally-informed modelling see:
 
