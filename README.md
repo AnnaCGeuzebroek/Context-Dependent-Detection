@@ -1,7 +1,7 @@
 # Context dependent target detection within a continuous context
 > Geuzebroek AC, Craddock H, O’Connell RG, &amp; Kelly SP (2022). Balancing true and false detection of intermittent sensory targets by adjusting the inputs to the evidence accumulation process. doi: https://biorxiv.org/cgi/content/short/2022.09.01.505650v1
 
-Code as described in Geuzebroek et al. (2022), allowing the extraction of behavioural and electrophysiological data (contextAnalysis) as well as behavioural and neurally-informed modelling of the data (contextModelling). All preprocessed data is available at DOI:[/10.17605/OSF.IO/YJVKU](https://osf.io/yjvku/?view_only=7ed5aee5d09a4d5ca13de1ba169b0588), but raw data will be made available at request. 
+Code as described in Geuzebroek et al. (2022), allowing the extraction of behavioural and electrophysiological data (contextAnalysis) as well as behavioural and neurally-informed modelling of the data (contextModelling). All preprocessed data is available at DOI:[/10.17605/OSF.IO/YJVKU](https://osf.io/yjvku/?view_only=7ed5aee5d09a4d5ca13de1ba169b0588) and raw data will be made available at request. 
 
 **Before going through this code download *dataAnalysis.m*, *dataModelling.m* and the dependencies [here](https://github.com/AnnaCGeuzebroek/Neurally-Informed-Modelling)**
 
