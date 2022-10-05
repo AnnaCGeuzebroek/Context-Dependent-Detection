@@ -1,23 +1,59 @@
-function [bestpmFits, EE] = applyNIModelling(obj, modelName, urgency, reflectingBound, initialGuess, modelPar, numRepeats, jitterPar, freeParameters)
+function [bestpmFits, EE] = applyNIModelling(obj, modelName, numRepeats,  modelPar, initialGuess, jitter, freeParams)
+%% applyNIModelling
+% as if for now, this is a seperated code, but eventually this will be
+% intergrated in applymodelling in the dataModelling object.
+% Needs a urgency signal and reflectingbound in obj.modelbehaviour.
+% set the intial parameters, for now it is just an extensive
+% search within the bounds given in modelPar. After which it
+% will run through a parfor to optimize the intial search
+% parameters.
+% Use as:
+%   modelName   =   Just in order to save stuff (such as
+%                   parameters fits).
+%   numRepeats  =   Number use to sample the parameters space.
+%                   otherwise just use the intialGuess to
+%                   refine.
+%   intialGuess =   when left empty 'generateRandParameters' is
+%                   used to search whole parameters space given
+%                   by the limits in modelPar.
+%                   Otherwise, it will take the intially
+%                   crudely fitted parameters to start of with.
+% There are also a couple of ways to use intial guesses to
+% jitter around or created completely new parameters.
+%	jitter      =	Sometimes a new estimated can be informed
+%                   by previously fitted parameters. This
+%                   can use intialGuess.
+%	freeParams  =   Create completely new parameters with
+%                   modelPar which will be added to
+
 saveFolder = fullfile(obj.outputFolder, 'Modelling');
 if ~exist(saveFolder, 'dir'); mkdir(saveFolder); end
-if ~exist('reflectingBound','var'); reflectingBound = 0; end
 
-if isempty(initialGuess) || exist('freeParameters', 'var')
+if ~exist('initialGuess', 'var');   initialGuess   = []; end
+if ~exist('freeParams', 'var');     freeParams = []; end
+if ~exist('jitter', 'var');         jitter = []; end
+
+if isempty(initialGuess) || ~isempty(freeParams)
     % for initial modelling, we start with generate a random matrix with
     % starting parameter vectors the specific range given in
     % modelPar.
-    if exist('freeParameters', 'var')
-        index  = 1:size(modelPar,1);
-        newParameters = nan(numRepeats, size(modelPar,1));
-        newParameters(:,~ismember( index, freeParameters))	= initialGuess(randi(size(initialGuess,1),numRepeats,1),:) + (randn(numRepeats, size(initialGuess,2)).*mean(initialGuess).*0.1);
+    if ~isempty(freeParams)
         
-        if ~isempty(jitterPar)
-            newParameters(:,ismember(index, freeParameters))   = jitterPar(randi(size(jitterPar,1),numRepeats,1),:) +  (randn(numRepeats, size(jitterPar,2)).*mean(jitterPar).*0.15);
-        else
-            newParameters(:,ismember(index, freeParameters))  = generateRandParameters(obj, modelPar, numRepeats);
+        index  = 1:size(modelPar,1);
+        
+        % preset newParams, with 'little' var around
+        % intialGuess that are 'fixed'.
+        newParams = nan(numRepeats, size(modelPar,1));
+        newParams(:, ~ismember(index, freeParams)) = initialGuess(randi(size(initialGuess,1),numRepeats,1),:) + (randn(numRepeats, size(initialGuess,2)).*mean(initialGuess).*0.1);
+        
+        for indRow = 1:size(freeParams,1)
+            if isempty(jitter) ||(indRow == 1 && size(freeParams,1) > 1)
+                newParams(:,ismember(index, freeParams(indRow,:)))  = generateRandParameters(obj, modelPar(freeParams(indRow,:),:), numRepeats);
+            else
+                newParams(:,ismember(index, freeParams(indRow,:)))  = jitter(randi(size(jitter,1),numRepeats,1),:) +  (randn(numRepeats, size(jitter,2)).*mean(jitter).*0.15);
+            end
         end
-        initialGuess = newParameters;
+        initialGuess = newParams;
     else
         initialGuess = generateRandParameters(obj, modelPar, numRepeats);
     end
@@ -44,7 +80,7 @@ if ~exist(fullfile(saveFolder, [saveFile '.mat']), 'file')
     parfor indPM = 1:numInitialGuess
         fprintf('start pt %i:', indPM)
         
-        [pm, Err] = fminsearchbnd(@(pm)NIDecisionModels(obj, pm, modelNames, urgency, noise, 0, reflectingBound), initialGuess(indPM,:), lowerBound, upperBound,  obj.options);
+        [pm, Err] = fminsearchbnd(@(pm)NIDecisionModels(obj, pm, modelNames, noise, 0), initialGuess(indPM,:), lowerBound, upperBound,  obj.options);
         
         % save them:
         EE(indPM) = Err;
