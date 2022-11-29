@@ -226,18 +226,18 @@ for indNoise = 1:size(noise,3) % for robustness, it can help to simulate more tr
             % Detect responses: This is when the DV crosses the bound.
             if indTime > lastresp+postRespPause
                 if obj.DetectOrDisc
-                    if abs(DV(indTime)) > currBound     % TODO for disc task < -currBound beside RespT check if correct or mistake.
+                    if abs(urgencyDV(indTime)) > currBound     % TODO for disc task < -currBound beside RespT check if correct or mistake.
                         RespT    = [RespT indTime*dt + MT];    % log the response after adding the non-decision time
                         lastresp = indTime;                 % and now this is the last response that happened, at sample n
                         
-                        if sign(DV(indTime)) == sign(TOW{indBlock}(indTime))
+                        if sign(urgencyDV(indTime)) == sign(TOW{indBlock}(indTime))
                             Resp = [Resp 1];
                         else
                             Resp = [Resp 0];
                         end
                     end
                 else
-                    if DV(indTime) > currBound % TODO for disc task < -currBound beside RespT check if correct or mistake.
+                    if urgencyDV(indTime) > currBound % TODO for disc task < -currBound beside RespT check if correct or mistake.
                         RespT = [RespT indTime*dt+MT]; % log the response after adding the non-decision time
                         lastresp = indTime; % and now this is the last response that happened, at sample n
                         
