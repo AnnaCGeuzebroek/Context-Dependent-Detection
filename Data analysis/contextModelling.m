@@ -19,8 +19,8 @@
 %
 % Add this data in the follow way:
 %   InputFolder     = BASEFOLDER\Data\Processed\
-%       Participant folder = BASEFOLDER\Data\Processed\PPNAME\ (note never use initials!)
-%           EEG folder           = BASEFOLDER\Data\Processed\EEG data\PPNAME\
+%       EEG folder          = BASEFOLDER\Data\Processed\EEG data\PPNAME
+%       Behavioural folder  = BASEFOLDER\Data\Processed\Behavioral data\
 %
 % costum-made code:
 %   1) dataAnalysis
@@ -175,7 +175,7 @@ parameters.stim.namesITI   = 'ITI';
 %% %%%%%%%%%%%%%%%%%%%% Pre-set figure parameters    %%%%%%%%%%%%%%%%%%%%%%
 % get your color scheme set here
 ColoursCond12  = [128 205 193; 1 133 113; 223 194 125; 166 97 26]/255;  % Context by Motion coherence
-ColoursCond3 =  brewermap(4,'Greys'); ColoursCond3 = ColoursCond3-0.16; % ITI
+% ColoursCond3 =  brewermap(4,'Greys'); ColoursCond3 = ColoursCond3-0.16; % ITI
 
 parameters.figLayOut.letterSize  = 9;
 parameters.figLayOut.letterType  = 'Arial';
@@ -315,7 +315,22 @@ clear MomEvidence
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% ------------------ Behavioural data analysis ---------------------------
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%[
+% False alarms are quite crucial for Hannah data, as we are looking into
+% how a stable context is changing the 'bound'. Mixed condition is giving
+% us about the same number of False alarms as the hard conditions.
+
+% Illustrating how to easily add conditions --> addition of Context
+for indPP = 1:length(parameters.ppNames)
+    parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,1) == 2, 4) = 3;
+    parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,1) == 1 & parameters.behaviour{indPP}.trialMatrix(:,2) == 70, 4) = 2;
+    parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,1) == 1 & parameters.behaviour{indPP}.trialMatrix(:,2) == 25, 4) = 1;
+end
+
+parameters.conditions{4} = [1 2 3];
+parameters.figLayOut.legTitle{4} = 'Difficulty Context';
+
+%% UNCOMMENT IF YOU ARE NOT INTERESTED IN BEHAVIOR DATA 
 plotExperiment   = 0; % 1 is counts, 2 is percentages. This will be depending on which are used for the model.
 
 % We started of with running the whole model to get an general
@@ -354,20 +369,6 @@ lme_FAMixed= fitglme(tblMixed, 'FAcount ~ 1 + Evidencestrength + (1 | ppNames)',
 % As the code plots everything depending on the condition combintation and
 % as FA are independent on the upcoming motion coherence (presumanly). 
 figureFolder = fullfile(parameters.figFolder, 'groupAverage', 'Behaviour');
-
-% False alarms are quite crucial for Hannah data, as we are looking into
-% how a stable context is changing the 'bound'. Mixed condition is giving
-% us about the same number of False alarms as the hard conditions.
-
-% Illustrating how to easily add conditions --> addition of Context
-for indPP = 1:length(parameters.ppNames)
-    parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,1) == 2, 4) = 3;
-    parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,1) == 1 & parameters.behaviour{indPP}.trialMatrix(:,2) == 70, 4) = 2;
-    parameters.behaviour{indPP}.trialMatrix(parameters.behaviour{indPP}.trialMatrix(:,1) == 1 & parameters.behaviour{indPP}.trialMatrix(:,2) == 25, 4) = 1;
-end
-
-parameters.conditions{4} = [1 2 3];
-parameters.figLayOut.legTitle{4} = 'Difficulty Context';
 
 % Uncomment to just plot False alarm rate, but for paper we use the model
 % adjusted FA plotting. 
@@ -536,6 +537,7 @@ line([0 0], [0 0.01], 'Color', 'black', 'LineWidth', 1.5)
 set(gca,'FontSize', parameters.figLayOut.letterSize);
 set(gca,'FontName', parameters.figLayOut.letterType);
 plotSave(gca, 'FAITIHistogram.png', figureFolder, [4 6.5154]);
+%}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% ------------------     SET-UP MODELLING  -------------------------------
@@ -572,6 +574,7 @@ parModelling.modelBehaviour.qps  = [.1 .3 .5 .7 .9];
 parModelling.plotRTquantiles([4 2]); 
 
 close all
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% ------------------     Behavioural modelling ---------------------------
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -599,7 +602,7 @@ parModelling.modelBehaviour.learnBoost = 3;     % which 'context' are we expecti
 parModelling.modelBehaviour.noiseSTD   = 0.1;
 parModelling.modelBehaviour.simulateMoreX = 1; % it can be good to simulate more trials than the subjects actually did because then at least the simulated data are reliable.
 parModelling.modelBehaviour.reflectingBound = 0;
-keyboard
+
 %% 1) There are many ways to set up the drift rate parameters and for the paper
 % we runned the following:
 %   1.1) One set  Drift parameter for Weak, scaled for Strong as 70/25* in both Fixed and Mixed.
@@ -614,7 +617,6 @@ keyboard
 %   1.4) Four free Drift parameters for the 4 different conditions - no
 %      constraints at all.
 
-
 %% 1.1) 3Bound1Drift1Leak1ndt, e.g. 3 bounds, 1 drift, 1 leak and 1 ndt
 % First a leaky-accumulation model ONLY allowing Bound-adjustment, with the 
 % same non-decision time across conditions, same leak and same drift.
@@ -626,7 +628,7 @@ modelPar = table(char(repmat('bound',3,1), 'drift', 'leak', 'ndt'),...
     [repmat(2,3,1);     .4;    1;       .35],...
     'VariableNames', {'Names', 'Lower', 'Upper'});
 
-[Params_3Bound, er] = parModelling.applyModelling(ModelName, numRepeats, modelPar);
+[Params_3Bound, err] = parModelling.applyModelling(ModelName, numRepeats, modelPar);
 
 % refine this model with more strict SIMPLEX parameters
 parModelling.options.MaxIter = 1000; % maximum iterations
@@ -635,8 +637,8 @@ parModelling.modelBehaviour.simulateMoreX = 5; % model several 'participants'
 Params_3Bound = parModelling.applyModelling(ModelName, numRepeats, modelPar, Params_3Bound(1:50,:)); % refine first 50 parameters.
 
 % Uncomment below to see the fit of the simplest model. 
-[pred, output] = parModelling.plotModellingResults(Params_3Bound(1,:), ModelName, modelPar.Names);
-adaptedFAPlot(parModelling, ModelName, pred);
+% [pred, output] = parModelling.plotModellingResults(Params_3Bound(1,:), ModelName, modelPar.Names);
+% adaptedFAPlot(parModelling, ModelName, pred);
 
 % Additionally, you can plot the parameters. This might help determine if
 % some parameters are edging into the one of the limits determined in
@@ -738,6 +740,7 @@ parModelling.modelBehaviour.reflectingBound = 0;
 % noise parameter.
 % NOTE here the noise is fitted as we have normalized the bound to be set
 % at 1.
+
 % first estimated the parameters
 ModelName   = 'NI_3Leak1Drift1ndt1stdNoise';
 
@@ -843,6 +846,7 @@ Params_NI3Criteria4drift = applyNIModelling(parModelling, ModelName, numRepeats,
 
 
 noise = parModelling.modelBehaviour.noiseSTD*randn(length(parModelling.modelBehaviour.datsum.TOW), max(parModelling.modelBehaviour.datsum.maxln), parModelling.modelBehaviour.simulateMoreX); % note the 0.1* because assuming s = 0.1. Not done for NI models below
-[err, simdat, ~, DV] = NIDecisionModels(parModelling, Params_NI3Criteria4drift(1,:), modelPar.Names, noise, 1);
+[err, simdat, ~, DV] = NIDecisionModels(parModelling,Params_NI3Criteria4drift(1,:), modelPar.Names, noise, 1);
+    
 [pred, outputParameters.Criteria]  = parModelling.plotModellingResults(Params_NI3Criteria4drift(1,:), ModelName, modelPar.Names, err, simdat, DV);
 adaptedFAPlot(parModelling, pred, ModelName);
