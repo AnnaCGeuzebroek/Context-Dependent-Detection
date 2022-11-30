@@ -3,61 +3,28 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %-----------------  Leaky accumulation  ---------------------------
 function [err, simdat, pred, DecValue] = NIDecisionModels(obj, pm, parNames, noise, getsimDV)
-%% diffusionModel
-% Implements the sequential sampling modelling based on
-% accumulation where several parameters can be set to be free.
-% Function can be used to optimize within SIMPLEX function (see
-% obj.applyModelling), as well as just on each own, allowing
-% you to extract a prediction of a certain parameters
-% combination and the simulated decision value.  Model based on
-% Ossmy, et al 2013 (https://pubmed.ncbi.nlm.nih.gov/23684972/)
-% Parameters can be set free:
-%   bound   =   Threshold determining the amount of accumulate
-%               before commiting to a decision.
-%   drift   =   average amount of evidence accumulated per unit
-%               time, this can be an index of task difficulty
-%               or on participants ability. When having several
-%               difficutly levels, 1) this can either be set as
-%               one parameters which will be scaled accordingly
-%               2) one for each difficulty level or 3)
-%               indiviudally fitted drift per difficulty level
-%               per condition.
-%   leak    =   How much previous accumulated evidence (t-1) is
-%               weighted to current incoming evidence (t). Set
-%               between 0 = perfect accumulation and 1 = full
-%               leak e.g. decide based on current evidence
-%               only.
-%   ndt     =   non-decision time accounting for motor response
-%               delays
-%   boost   =   possibilty boosting the drift rate, if we
-%               expect learning effects --> index to which
-%               condition in the first column of the
-%               trialmatrix.
-%   criteria =  reference on momentary evidence, determine what is see as
-%               signal or noise (similar to signal detection theory)
-%
-% inputParameters include
-%   1) pm       =   which are either estimated in fminsearchbnd using
-%                   going through the fit parameters space or a
-%                   single set of parameters to get the output.
-%   2) parNames =   Names corresponding to the pm, should be
-%                   ones as described above and for each pm
-%                   one!
-%   3) noise    =   set noise levels, e.g. the stocastic part.
-%   4) getsimDV =   0 - don't, 1 - get simulated DV.
-%
-if ~exist('getsimDV','var'); getsimDV = 0; end
+% Simulates beh matrix for continuous leaky accumulator with certain given parameters
+% It has 3 bound parameters (one for W one for S one for M) but single leak parameter and single non-decision time (ndt)
+% assumed to be before decision process (think of it as a delay from changes on the screen to being counted in the accumulator)
+% and 1 free drift rate parameter for lo coh scaled up for high coh
+% datsum = obj.modelBehaviour.datsum;
+% Simulates beh matrix for continuous leaky accumulator with certain given parameters
 
-% extract parameters from modelBehaviour.
-urgency         = obj.modelBehaviour.Urgency;
-reflectingBound = obj.modelBehaviour.reflectingBound;
+% It has 3 bound parameters (one for W one for S one for M) but single leak parameter and single non-decision time (ndt)
+% assumed to be before decision process (think of it as a delay from changes on the screen to being counted in the accumulator)
+% and 1 free drift rate parameter for lo coh scaled up for high coh
 
+if ~exist('getCPP','var'); getCPP = 0; end
+
+% pm are parameters
 TOW    = obj.modelBehaviour.datsum.TOW;
 bt     = obj.modelBehaviour.datsum.bt;
 trialMatrix = obj.modelBehaviour.datsum.trialMatrix;
+reflectingBound = obj.modelBehaviour.reflectingBound;
+urgency         = obj.modelBehaviour.Urgency;
 
 % get timing parameters
-dt = 1/obj.stim.refreshRate;      % sample period
+dt = obj.stim.duration/obj.stim.refreshRate;      % sample period
 maxRT = obj.stim.RTdeadLine(end); % the upper limit for RTs to be classed as hits
 minRT = obj.stim.RTCutOff;        % minium allowable RT to call a response a 'hit', in msec. There was only one RT in the S blocks across all subjects that was shorter than this, and next shortest was nearly 100 ms later
 
@@ -68,16 +35,17 @@ minRT = obj.stim.RTCutOff;        % minium allowable RT to call a response a 'hi
 % timing!!
 postRespPause = 1*obj.stim.refreshRate;
 
+waitAfterTarget = obj.stim.refreshRate/2;  % start the urgency signal half a second into the ITI
+
 % Without loss of generality, and to facilitate DV simulation and comparison with NI models later, will assign 67 ms of
 % the nondecision time to the motor end, and the free part will be for 'PRE' decisional NDT:
 
 MT = 4*dt;
-continAccDur = obj.stim.refreshRate/10;    % for how many samples (100 ms) should the CPP keep accumulating after reaching commitment? From R-locked CPPs it looks like around 100 ms
-waitAfterTarget = obj.stim.refreshRate/2;  % start the urgency signal half a second into the ITI
+continAccDur = obj.stim.refreshRate/10; % for how many samples (100 ms) should the CPP keep accumulating after reaching commitment? From R-locked CPPs it looks like around 100 ms
 
-
-targetPlot   = floor((obj.stim.targetEpoch(1))/dt):ceil((obj.stim.targetEpoch(end))/dt);
+targetPlot = floor((obj.stim.targetEpoch(1))/dt):ceil((obj.stim.targetEpoch(end))/dt);
 responsePlot = floor((obj.stim.responseEpoch(1))/dt):ceil((obj.stim.responseEpoch(end))/dt);
+
 
 % preset and extract parameters.
 bound = []; drift = []; leak = []; ndt = []; boost = []; criteria = []; trialnoise = [];
@@ -87,7 +55,8 @@ end
 
 % Some parameters are not going to be used, they do need to be
 % defined, therefore to save time in the for loop, we set them
-% here..
+% here.
+
 if isempty(bound),      bound = 1; end
 if isempty(leak),       leak = 0; end
 if isempty(criteria),   criteria = 0; end
@@ -108,20 +77,18 @@ elseif size(boost,2) > 1
     drift = repmat(drift, 2,1).* boost';
 end
 
-
 % preallocated parameters.
-simdat  = [];
+simdat = [];
 
 acc = 1;
-hit = 1; miss = 2; false_alarm = 3;     % codes for response types
+hit = 1; miss = 2; false_alarm = 3; % codes for response types
 
-for indNoise = 1:size(noise,3) % for robustness, it can help to simulate more trials than there are in the real data, This is in line with 'several' participants
+for indNoise = 1:size(noise,3) % for robustness, it can help to simulate more trials than there are in the real data...
     
     % loop through block trials TODO now only continuous, might
     % need to add a trial-loop instead of block for discrete
     % experiments.
     for indBlock = 1:length(TOW)
-        
         % get the appropiated fit parametrs per conditions.
         % When there is only 1 it will be fixed accross
         % conditions. If the user set several it will find the
@@ -154,40 +121,32 @@ for indNoise = 1:size(noise,3) % for robustness, it can help to simulate more tr
         % Gaussian noise   changed this to make it more transferable,
         % e.g. get the timeline which should be indexing the
         % difficulty levels to get the right drift rate
-        
-        timeLine = TOW{indBlock}';
-        timeLine(timeLine ~= 0) = currDrift(timeLine(timeLine ~= 0));
-        
-        if obj.DetectOrDisc
-            direction = TOW{indBlock}(:,1)';
-            timeLine(direction < 1) = timeLine(direction < 1)*-1;
-        end
+        timeLine = TOW{indBlock}(:,1)';
+        timeLine(timeLine ~= 0) = currDrift(abs(timeLine(timeLine ~= 0)));
         
         sensEv = timeLine + currTrialNoise.*noise(indBlock,1:length(TOW{indBlock}), indNoise);
         
-        
         % initalization of parameters.
-        DV(1:round(ndt/dt)) = 0;    % initialize DV to a single 0 for the first time points of the block, up until the pre-decision nondecision time
-        lastresp = -postRespPause;  % we only accumulate if it's a certain time since last response. Initialise to this value so accumulation begins right away at start of block
+        DV(1:round(ndt/dt)) = 0;   % initialize DV to a single 0 for the first time points of the block, up until the pre-decision nondecision time
+        lastresp = -postRespPause; % we only accumulate if it's a certain time since last response. Initialise to this value so accumulation begins right away at start of block
         
         RespT   = []; % keep track of all responses times
         targT   = []; % keep track of all targets onset times
-        
-        if obj.DetectOrDisc
-            Resp = [];  % keep track of all actual response
-        end
         
         DVendval = nan;
         
         % now simulate the block by looping through all sample points:
         for indTime = round(ndt/dt)+1:length(sensEv)
             
-            if  indTime <= lastresp+continAccDur || indTime > lastresp + postRespPause %  indTime <= lastresp+continAccDur || don't accumulate unless it has been a sufficient time since last response
+            if indTime <= lastresp+continAccDur || indTime > lastresp + postRespPause % don't accumulate unless it has been a sufficient time since last response
+                
                 % this gives us the 'reflecting bound'
                 if reflectingBound
                     DV(indTime) = max((1-currLeak)*DV(indTime-1) + sensEv(indTime-round(ndt/dt)) - currCriteria, 0);% There is the main model equation! (see e.g. Ossmy et al 2013)
+                    % TODO REFLECTING BOUND FOR
+                    % DISCRIMINATION!!!
                 else
-                    DV(indTime) = (1-currLeak)*DV(indTime-1) + sensEv(indTime-round(ndt/dt)) - currCriteria; % There is the main model equation! (see e.g. Ossmy et al 2013)
+                    DV(indTime) = (1-currLeak)*DV(indTime-1) + sensEv(indTime-round(ndt/dt)) - currCriteria;   % There is the main model equation! (see e.g. Ossmy et al 2013)
                 end
             else
                 % As we are using the empiraical CPP as an
@@ -207,7 +166,7 @@ for indNoise = 1:size(noise,3) % for robustness, it can help to simulate more tr
                 if DV(indTime) == 0, DVendval = nan; end % when the CPP has reached back down to zero, turn off the linear ramp-down
             end
             
-            % detect target transitions
+            % Detect target transitions
             if TOW{indBlock}(indTime) > TOW{indBlock}(indTime-1)
                 targT = [targT indTime*dt];
             end
@@ -215,7 +174,7 @@ for indNoise = 1:size(noise,3) % for robustness, it can help to simulate more tr
             % detect responses
             if indTime > waitAfterTarget
                 if indTime-waitAfterTarget <= size(urgency,1)
-                    urgencyDV(indTime) = DV(indTime) + urgency(indTime-waitAfterTarget, bt(indBlock,1)); % total decision signal including urgency
+                    urgencyDV(indTime) = DV(indTime) + urgency(indTime-waitAfterTarget,bt(indBlock)); % total decision signal including urgency
                 else  % when there's a miss, hard to know what to do with urgency - most neutral thing might be to keep it steady where it is
                     urgencyDV(indTime) = DV(indTime) + urgency(end, bt(indBlock));
                 end
@@ -223,71 +182,52 @@ for indNoise = 1:size(noise,3) % for robustness, it can help to simulate more tr
                 urgencyDV(indTime) = DV(indTime);
             end
             
-            % Detect responses: This is when the DV crosses the bound.
+            % Now check for bound crossing. Only do this if it is not within postRespPause since last bound crossing
             if indTime > lastresp+postRespPause
-                if obj.DetectOrDisc
-                    if abs(urgencyDV(indTime)) > currBound     % TODO for disc task < -currBound beside RespT check if correct or mistake.
-                        RespT    = [RespT indTime*dt + MT];    % log the response after adding the non-decision time
-                        lastresp = indTime;                 % and now this is the last response that happened, at sample n
-                        
-                        if sign(urgencyDV(indTime)) == sign(TOW{indBlock}(indTime))
-                            Resp = [Resp 1];
-                        else
-                            Resp = [Resp 0];
-                        end
-                    end
-                else
-                    if urgencyDV(indTime) > currBound % TODO for disc task < -currBound beside RespT check if correct or mistake.
-                        RespT = [RespT indTime*dt+MT]; % log the response after adding the non-decision time
-                        lastresp = indTime; % and now this is the last response that happened, at sample n
-                        
-                        if ~isempty(targT)
-                            waitAfterTarget = round(targT(end)/dt)+maxRT*obj.stim.refreshRate; % start counting the urg again at 0.5 sec after target offset
-                        end
+                if urgencyDV(indTime) > currBound % TODO for disc task < -currBound beside RespT check if correct or mistake.
+                    RespT = [RespT indTime*dt+MT]; % log the response after adding the non-decision time
+                    lastresp = indTime; % and now this is the last response that happened, at sample n
+                    
+                    if ~isempty(targT)
+                        waitAfterTarget = round(targT(end)/dt)+maxRT*obj.stim.refreshRate; % start counting the urg again at 0.5 sec after target offset
                     end
                 end
             end
         end
+        
         % now make the output matrix that has all the RTs w.r.t. target onset
         % and false alarms. This has to be equivalent to how the real data were
-        % analysed!
+        % analysed! Deals in seconds
         for indTarget = 1:length(targT)
-            nextrespind = find(RespT > targT(indTarget)+minRT & RespT < targT(indTarget)+maxRT, 1); % find the index of the next response which is within the allowable @hit@ window
+            nextrespind = find(RespT > targT(indTarget) + minRT & RespT < targT(indTarget) + maxRT, 1); % find the index of the next response which is within the allowable @hit@ window
             if ~isempty(nextrespind)
-                if obj.DetectOrDisc
-                    simdat  = [simdat; trialMatrix{indBlock}(indTarget,:) hit RespT(nextrespind)-targT(indTarget) Resp(nextrespind)]; % 1 = hit
-                else
-                    simdat  = [simdat; trialMatrix{indBlock}(indTarget,:) hit RespT(nextrespind)-targT(indTarget)]; % 1 = hit
-                end
+                simdat  = [simdat; trialMatrix{indBlock}(indTarget,:) hit RespT(nextrespind)-targT(indTarget)]; % 1 = hit
             else % if there WAS no next response, set the response parameters for this trial as 'not a number'
-                if obj.DetectOrDisc
-                    simdat  = [simdat; trialMatrix{indBlock}(indTarget,:) miss nan nan]; % 2 = miss
-                else
-                    simdat  = [simdat; trialMatrix{indBlock}(indTarget,:) miss nan];
-                end
+                simdat  = [simdat; trialMatrix{indBlock}(indTarget,:) miss nan];
             end
             
             if getsimDV == 1
                 if (targT(indTarget)/dt) + ceil((obj.stim.targetEpoch(end))/dt) < length(DV)
                     DecValue.Target(1:length(targetPlot),acc) = DV(round(targT(indTarget)/dt) + targetPlot);
+                    
                     if ~isempty(nextrespind)
                         DecValue.Response(1:length(responsePlot),acc) = DV(round(RespT(nextrespind)/dt) + responsePlot);
                     else
                         DecValue.Response(1:length(responsePlot),acc) = nan;
                     end
+                    
                 else
                     DecValue.Target(1:length(targetPlot),acc) = nan;
                     if ~isempty(nextrespind)
                         DecValue.Response(1:length(responsePlot),acc) = nan;
                     end
                 end
-                acc = acc + 1;
             end
         end
         
         % TODO check what to do with FA in disc task
-        ITIstartT = [0 targT+obj.stim.duration];
-        for indITI = 1:length(ITIstartT)-1
+        ITIstartT = [0 targT+1];
+        for indITI = 1:length(ITIstartT)
             nexttargind = find(targT > ITIstartT(indITI),1); % index of next target
             % from this establish the end of the window starting from the current ITI start where we will check for FAs
             if ~isempty(nexttargind)
@@ -299,23 +239,13 @@ for indNoise = 1:size(noise,3) % for robustness, it can help to simulate more tr
             nextrespind = find(RespT > ITIstartT(indITI)+maxRT-(obj.stim.duration) & RespT < endtime); % find indices of responses the ITI window, ruling out any at the very start that are within the hit window from the previous target. Target duration is 1 sec, so fs in sample points
             
             for m = 1:length(nextrespind)
-                if obj.DetectOrDisc
-                    simdat  = [simdat; trialMatrix{indBlock}(indITI,:) false_alarm RespT(nextrespind(m))-endtime  Resp(nextrespind(m))];
-                else
-                    simdat  = [simdat; trialMatrix{indBlock}(indITI,:) false_alarm RespT(nextrespind(m))-endtime];
-                end
+                simdat  = [simdat; trialMatrix{indBlock}(indITI,:) false_alarm RespT(nextrespind(m))-endtime];
                 
-                if getsimDV == 1  
-                    DecValue.Target(1:length(targetPlot),acc)   = nan;
-
-                    try
-                        DecValue.Response(1:length(responsePlot),acc) = DV(round(RespT(nextrespind(m))/dt) + responsePlot);
-                    catch
-                        DecValue.Target(1:length(responsePlot),acc)   = nan;
-                    end
-
-                end
-              
+                DecValue.Target(:,acc) = nan;
+                % TODO here we can start seeing psychophysical
+                % kernel if we have the actual traces
+                DecValue.Response(:,acc) = nan;
+                
                 acc = acc + 1;
             end
         end
@@ -325,7 +255,6 @@ end
 
 % It's possible that with certain parameters the DV NEVER crosses the bound, so need a quick fix so no error happens:
 % this happened once by total fluke - there was no 'E' below, so there must have been a false alarm before the first target (cond=nan) and nothing else!
-
 if isempty(simdat)
     tmpCond = unique(reshape([trialMatrix{:}]', size(trialMatrix{1},2), [])', 'rows');
     simdat = [tmpCond repmat(3, size(tmpCond,1),1) repmat(10, size(tmpCond,1),1)];
@@ -335,4 +264,5 @@ if obj.modelBehaviour.ChiOrG == 1
     [err,pred] = Chisquared(obj, simdat);
 elseif obj.modelBehaviour.ChiOrG == 2
     [err,pred] = Gsquared(obj,simdat);
+end
 end
