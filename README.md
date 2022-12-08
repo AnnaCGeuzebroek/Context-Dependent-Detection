@@ -5,6 +5,8 @@ Code as described in Geuzebroek et al. (2022), allowing the extraction of behavi
 
 **Before going through this code download *dataAnalysis.m*, *dataModelling.m* and the dependencies [here](https://github.com/AnnaCGeuzebroek/Neurally-Informed-Modelling)**
 
+NOTE slight change in the way that early responses are dealt with in dataAnalysis, this will give us slightly higher G2 as reported in the paper. However, this is as we should rerun the modelling and does NOT have any consequences in the way the models are compared!
+
 For an excellent review on neurally-informed modelling see:
 
 - O’Connell, R.G., Shadlen, M.N., Wong-Lin, K., & Kelly, S.P. (2018). Bridging Neural and Computational Viewpoints on Perceptual Decision-Making. *Trends in neurosciences*. [link](https://www.sciencedirect.com/science/article/pii/S0166223618301668)
