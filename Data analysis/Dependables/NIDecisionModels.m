@@ -222,6 +222,7 @@ for indNoise = 1:size(noise,3) % for robustness, it can help to simulate more tr
                         DecValue.Response(1:length(responsePlot),acc) = nan;
                     end
                 end
+                acc = acc + 1;
             end
         end
         
